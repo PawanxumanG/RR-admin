@@ -49,15 +49,10 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        .color-bubble {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border: 1px solid rgba(255,255,255,0.1);
-            cursor: pointer;
-            transition: transform 0.2s;
+        .event-card-preview {
+            background-size: 200% 200%;
+            transition: transform 0.3s ease;
         }
-        .color-bubble:hover { transform: scale(1.2); }
     </style>
     <script type="importmap">
     {
@@ -82,37 +77,29 @@
         const safeB64Encode = (str) => btoa(unescape(encodeURIComponent(str)));
         const safeB64Decode = (str) => decodeURIComponent(escape(atob(str)));
 
-        const CONFIG_PASSWORD = "Pawan1645@";
-
-        const THEME_PRESETS = [
-            { name: 'Sunset Amber', card: 'linear-gradient(135deg, #161a22 0%, #2a1b12 100%)', btn: 'linear-gradient(90deg, #f97316 0%, #ea580c 100%)' },
-            { name: 'Midnight Blue', card: 'linear-gradient(135deg, #0d1117 0%, #161a22 100%)', btn: 'linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%)' },
-            { name: 'Emerald Night', card: 'linear-gradient(135deg, #161a22 0%, #064e3b 100%)', btn: 'linear-gradient(90deg, #10b981 0%, #059669 100%)' }
-        ];
+        const MASTER_PIN = "Pawan1645@";
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('notice'); 
             const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem('rr_admin_session') === 'active');
-            const [isConfigUnlocked, setIsConfigUnlocked] = useState(false);
+            const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(false);
             const [loginKeyInput, setLoginKeyInput] = useState('');
-            const [masterPassInput, setMasterPassInput] = useState('');
+            const [securityPinInput, setSecurityPinInput] = useState('');
             
             const [config, setConfig] = useState(() => {
                 const saved = localStorage.getItem('rr_admin_config_v4');
-                return saved ? JSON.parse(saved) : { token: '', owner: '', repo: '' };
+                return saved ? JSON.parse(saved) : { token: '', owner: 'PawanxumanG', repo: 'rr-college' };
             });
 
             // Data States
             const [noticeData, setNoticeData] = useState({ show: true, title: '', message: [], updates: { version: '', items: [] } });
             const [announcementData, setAnnouncementData] = useState({ id: 'notice-default', show: false, title: '', message: '' });
             const [eventsData, setEventsData] = useState({ show: true, events: [] });
-            const [albumData, setAlbumData] = useState({ settings: { downloadPassword: '', theme: { cardGradient: '#161a22', buttonGradient: '#f97316' } }, events: [] });
             const [loginData, setLoginData] = useState({ keys: [] });
 
-            const [shas, setShas] = useState({ notice: null, announcement: null, events: null, album: null, login: null });
+            const [shas, setShas] = useState({ notice: null, announcement: null, events: null, login: null });
             const [loading, setLoading] = useState(false);
             const [status, setStatus] = useState(null);
-            const [showConfig, setShowConfig] = useState(false);
 
             useEffect(() => {
                 localStorage.setItem('rr_admin_config_v4', JSON.stringify(config));
@@ -125,72 +112,25 @@
 
             const handleSync = async (targetTab = activeTab) => {
                 if (!config.token || !config.owner || !config.repo) {
-                    notify('error', 'GitHub Configuration is missing.');
+                    notify('error', 'GitHub Config missing. Check Security tab.');
                     return;
                 }
                 setLoading(true);
-                const mapping = { notice: 'notice.json', announcement: 'announcement.json', events: 'events.json', album: 'album.json', keys: 'login.json' };
+                const mapping = { notice: 'notice.json', announcement: 'announcement.json', events: 'events.json', security: 'login.json' };
                 const path = mapping[targetTab];
                 try {
                     const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`;
                     const res = await fetch(url, { headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' } });
-                    if (!res.ok) throw new Error(`Sync failed for ${path}. Ensure the file exists in your repo.`);
+                    if (!res.ok) throw new Error(`Sync failed for ${path}. Ensure file exists.`);
                     const data = await res.json();
                     const content = JSON.parse(safeB64Decode(data.content));
                     
                     if (targetTab === 'notice') { setNoticeData(content); setShas(s => ({...s, notice: data.sha})); }
                     else if (targetTab === 'announcement') { setAnnouncementData(content); setShas(s => ({...s, announcement: data.sha})); }
                     else if (targetTab === 'events') { setEventsData(content); setShas(s => ({...s, events: data.sha})); }
-                    else if (targetTab === 'album') { setAlbumData(content); setShas(s => ({...s, album: data.sha})); }
-                    else if (targetTab === 'keys') { setLoginData(content); setShas(s => ({...s, login: data.sha})); }
+                    else if (targetTab === 'security') { setLoginData(content); setShas(s => ({...s, login: data.sha})); }
                     
-                    notify('success', `${targetTab} data synchronized.`);
-                } catch (err) {
-                    notify('error', err.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const seedInitialKey = async () => {
-                if (!config.token || !config.owner || !config.repo) {
-                    notify('error', 'Set GitHub config first.');
-                    return;
-                }
-                setLoading(true);
-                const initialLoginData = {
-                    keys: [{
-                        id: "initial-admin",
-                        key: "RR-ADMIN",
-                        owner: "System Admin",
-                        isActive: true,
-                        expiresAt: "2030-12-31"
-                    }]
-                };
-                try {
-                    const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/login.json`;
-                    // First try to check if it exists
-                    const checkRes = await fetch(url, { headers: { 'Authorization': `token ${config.token}` } });
-                    let sha = null;
-                    if (checkRes.ok) {
-                        const data = await checkRes.json();
-                        sha = data.sha;
-                    }
-
-                    const body = {
-                        message: "Initialize Admin Keys",
-                        content: safeB64Encode(JSON.stringify(initialLoginData, null, 2)),
-                        sha: sha || undefined
-                    };
-
-                    const res = await fetch(url, {
-                        method: 'PUT',
-                        headers: { 'Authorization': `token ${config.token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body)
-                    });
-
-                    if (!res.ok) throw new Error('Failed to seed key file.');
-                    notify('success', 'Initial key file created! Use RR-ADMIN to login.');
+                    notify('success', `${targetTab} synced.`);
                 } catch (err) {
                     notify('error', err.message);
                 } finally {
@@ -199,14 +139,15 @@
             };
 
             const handlePublish = async () => {
-                const mapping = { notice: 'notice.json', announcement: 'announcement.json', events: 'events.json', album: 'album.json', keys: 'login.json' };
-                const shaKey = activeTab === 'keys' ? 'login' : activeTab;
+                const mapping = { notice: 'notice.json', announcement: 'announcement.json', events: 'events.json', security: 'login.json' };
+                const shaKey = activeTab === 'security' ? 'login' : activeTab;
                 const currentSha = shas[shaKey];
-                if (!config.token || !currentSha) { notify('error', 'Sync data before publishing.'); return; }
+                
+                if (!config.token || !currentSha) { notify('error', 'Sync before publishing.'); return; }
                 
                 setLoading(true);
                 const path = mapping[activeTab];
-                const currentData = activeTab === 'notice' ? noticeData : activeTab === 'announcement' ? announcementData : activeTab === 'events' ? eventsData : activeTab === 'album' ? albumData : loginData;
+                const currentData = activeTab === 'notice' ? noticeData : activeTab === 'announcement' ? announcementData : activeTab === 'events' ? eventsData : loginData;
 
                 try {
                     const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`;
@@ -220,10 +161,10 @@
                         headers: { 'Authorization': `token ${config.token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify(body)
                     });
-                    if (!res.ok) throw new Error('Update failed.');
+                    if (!res.ok) throw new Error('Publication failed.');
                     const resData = await res.json();
                     setShas(prev => ({ ...prev, [shaKey]: resData.content.sha }));
-                    notify('success', 'Published live!');
+                    notify('success', 'Changes are now live!');
                 } catch (err) {
                     notify('error', err.message);
                 } finally {
@@ -237,47 +178,60 @@
                 try {
                     const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/login.json`;
                     const res = await fetch(url, { headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' } });
-                    if (!res.ok) throw new Error('Auth file (login.json) not found in repo.');
+                    if (!res.ok) throw new Error('Critical: login.json missing in repo.');
                     const data = await res.json();
                     const content = JSON.parse(safeB64Decode(data.content));
                     
                     const userKey = content.keys.find(k => k.key === loginKeyInput && k.isActive);
                     if (userKey) {
-                        const expiry = userKey.expiresAt ? new Date(userKey.expiresAt) : null;
-                        if (expiry && expiry < new Date()) {
-                            notify('error', 'This key has expired.');
-                        } else {
-                            setIsLoggedIn(true);
-                            localStorage.setItem('rr_admin_session', 'active');
-                            notify('success', `Access Granted. Welcome ${userKey.owner}`);
-                        }
+                        setIsLoggedIn(true);
+                        localStorage.setItem('rr_admin_session', 'active');
+                        notify('success', `Welcome back, ${userKey.owner}`);
                     } else {
-                        notify('error', 'Invalid or deactivated key.');
+                        notify('error', 'Invalid Access Key.');
                     }
                 } catch (err) {
-                    notify('error', err.message);
+                    notify('error', 'Login Error: ' + err.message);
                 } finally {
                     setLoading(false);
                 }
             };
 
-            const handleImageUpload = (e, sIdx, iIdx) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const updated = [...albumData.events];
-                    updated[sIdx].images[iIdx].src = ev.target.result;
-                    updated[sIdx].images[iIdx].downloadName = file.name;
-                    setAlbumData({...albumData, events: updated});
-                    notify('success', 'Image uploaded.');
+            // Event Management
+            const addEvent = () => {
+                const newEv = {
+                    title: 'New Event Title',
+                    content: ['Point 1', 'Point 2'],
+                    theme: { gradient: ["#ff9800", "#ff5722"], glow: "rgba(255,152,0,0.5)" }
                 };
-                reader.readAsDataURL(file);
+                setEventsData({ ...eventsData, events: [newEv, ...eventsData.events] });
             };
 
-            const addKey = () => {
-                const newKey = { id: crypto.randomUUID(), key: 'RR-' + Math.random().toString(36).substring(2, 8).toUpperCase(), owner: 'Admin User', isActive: true, expiresAt: new Date(Date.now() + 30*86400000).toISOString().split('T')[0] };
-                setLoginData({...loginData, keys: [newKey, ...loginData.keys]});
+            const removeEvent = (index) => {
+                const updated = eventsData.events.filter((_, i) => i !== index);
+                setEventsData({ ...eventsData, events: updated });
+            };
+
+            const updateEvent = (index, field, value) => {
+                const updated = [...eventsData.events];
+                if (field === 'content') {
+                    updated[index].content = value.split('\n');
+                } else {
+                    updated[index][field] = value;
+                }
+                setEventsData({ ...eventsData, events: updated });
+            };
+
+            const handleUnlockSecurity = (e) => {
+                e.preventDefault();
+                if (securityPinInput === MASTER_PIN) {
+                    setIsSecurityUnlocked(true);
+                    setSecurityPinInput('');
+                    notify('success', 'Security privileges granted.');
+                    handleSync('security');
+                } else {
+                    notify('error', 'Unauthorized access denied.');
+                }
             };
 
             if (!isLoggedIn) {
@@ -286,54 +240,21 @@
                         <div className="glass-panel w-full max-w-md p-10 rounded-[3rem] animate-slide-up text-center border-orange-500/20 shadow-2xl">
                             <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl text-white mx-auto shadow-2xl mb-8">RR</div>
                             <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-2">RR College Admin</h2>
-                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em] mb-12">Restricted Access Portal</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] mb-12">Portal v3.2</p>
                             
                             <form onSubmit=${handleLogin} className="space-y-4">
                                 <input 
                                     type="text" 
-                                    autoFocus
                                     value=${loginKeyInput} 
                                     onChange=${e => setLoginKeyInput(e.target.value)} 
                                     className="w-full bg-black/60 border border-slate-800 p-5 rounded-3xl text-center font-mono tracking-widest text-lg outline-none focus:border-orange-500 transition-all text-white" 
-                                    placeholder="PASTE ACCESS KEY"
+                                    placeholder="ACCESS KEY"
                                 />
                                 <button type="submit" disabled=${loading} className="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-5 rounded-3xl text-[11px] uppercase tracking-widest shadow-xl transition-all disabled:opacity-50">
-                                    ${loading ? html`<div className="loader mx-auto"></div>` : 'Enter Dashboard'}
+                                    ${loading ? html`<div className="loader mx-auto"></div>` : 'Authenticate'}
                                 </button>
                             </form>
-                            
-                            <div className="mt-12 pt-8 border-t border-slate-800/50">
-                                <button onClick=${() => setShowConfig(!showConfig)} className="text-[9px] font-black text-slate-700 hover:text-slate-400 uppercase tracking-widest transition-all">⚙️ Advanced Configuration</button>
-                                ${showConfig && html`
-                                    <div className="mt-6 space-y-4 animate-slide-up bg-black/40 p-6 rounded-3xl border border-slate-800">
-                                        ${!isConfigUnlocked ? html`
-                                            <input type="password" value=${masterPassInput} onChange=${e => setMasterPassInput(e.target.value)} className="w-full bg-black border border-slate-800 p-4 rounded-2xl text-center outline-none focus:border-orange-500 text-white" placeholder="Master Config PIN"/>
-                                            <button onClick=${() => { if(masterPassInput === CONFIG_PASSWORD) setIsConfigUnlocked(true); else notify('error', 'Wrong PIN'); }} className="w-full py-3 text-[10px] font-black uppercase text-orange-500">Unlock System Config</button>
-                                        ` : html`
-                                            <div className="space-y-4 text-left">
-                                                <div>
-                                                    <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block">GitHub Personal Token</label>
-                                                    <input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full bg-black p-3 rounded-xl text-[10px] outline-none border border-slate-800 text-white"/>
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div>
-                                                        <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block">Repo Owner</label>
-                                                        <input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full bg-black p-3 rounded-xl text-[10px] outline-none border border-slate-800 text-white"/>
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block">Repo Name</label>
-                                                        <input value=${config.repo} onChange=${e => setConfig({...config, repo: e.target.value})} className="w-full bg-black p-3 rounded-xl text-[10px] outline-none border border-slate-800 text-white"/>
-                                                    </div>
-                                                </div>
-                                                <div className="pt-4 flex flex-col gap-2">
-                                                    <button onClick=${seedInitialKey} className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-xl text-[9px] font-black uppercase text-white transition-all shadow-lg shadow-blue-900/20">1. Initialize Auth File (login.json)</button>
-                                                    <p className="text-[7px] text-slate-500 text-center uppercase tracking-widest italic leading-relaxed">Required if login.json doesn't exist. This creates key: RR-ADMIN</p>
-                                                </div>
-                                            </div>
-                                        `}
-                                    </div>
-                                `}
-                            </div>
+                            <p className="mt-8 text-[9px] text-slate-600 font-black uppercase tracking-widest">Master: Pawan Ponnam</p>
                         </div>
                         ${status && html`<div className="fixed bottom-8 px-6 py-3 bg-red-600/10 border border-red-500 text-red-400 rounded-full text-[10px] font-black uppercase tracking-widest animate-slide-up shadow-2xl">${status.message}</div>`}
                     </div>
@@ -342,173 +263,206 @@
 
             return html`
                 <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-6">
-                    <header className="flex flex-col lg:flex-row justify-between items-center gap-6 bg-[#161b22] p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
+                    <!-- Header -->
+                    <header className="flex flex-col xl:flex-row justify-between items-center gap-6 bg-[#161b22] p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl relative">
                         <div className="flex items-center gap-4">
                             <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl shadow-orange-900/40">RR</div>
                             <div>
                                 <h1 className="text-lg font-black text-white">College Admin</h1>
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Live Workspace v3.0</p>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Live Control Panel</p>
                             </div>
                         </div>
 
                         <nav className="bg-black/40 p-1 rounded-2xl flex flex-wrap justify-center gap-1 border border-slate-800/50">
-                            ${['notice', 'announcement', 'events', 'album', 'keys'].map(tab => html`
-                                <button key=${tab} onClick=${() => setActiveTab(tab)} className=${`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
-                                    ${tab === 'keys' ? 'Auth Keys' : tab}
+                            ${['notice', 'announcement', 'events', 'security'].map(tab => html`
+                                <button key=${tab} onClick=${() => { setActiveTab(tab); if(tab !== 'security') setIsSecurityUnlocked(false); }} className=${`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+                                    ${tab === 'security' ? '🔐 Security' : tab}
                                 </button>
                             `)}
                         </nav>
 
                         <div className="flex gap-2">
-                            <button onClick=${() => { localStorage.removeItem('rr_admin_session'); setIsLoggedIn(false); }} className="px-5 py-3 bg-slate-800 rounded-2xl text-[9px] font-black uppercase text-slate-400 border border-slate-700 hover:text-white transition-all">Logout</button>
-                            <button onClick=${() => handleSync()} disabled=${loading} className="px-5 py-3 bg-blue-600 rounded-2xl text-[9px] font-black uppercase text-white shadow-lg disabled:opacity-50 flex items-center gap-2">
-                                ${loading ? html`<div className="loader"></div>` : '🔄 Sync'}
+                            <button onClick=${() => { localStorage.removeItem('rr_admin_session'); setIsLoggedIn(false); }} className="px-5 py-3 bg-slate-800 rounded-2xl text-[9px] font-black uppercase text-slate-400 border border-slate-700">Logout</button>
+                            <button onClick=${() => handleSync()} disabled=${loading} className="px-5 py-3 bg-blue-600 rounded-2xl text-[9px] font-black uppercase text-white shadow-lg flex items-center gap-2">
+                                ${loading ? html`<div className="loader"></div>` : 'Sync'}
                             </button>
                         </div>
                     </header>
 
+                    <!-- Status Notification -->
                     ${status && html`<div className="fixed bottom-8 right-8 z-[100] px-6 py-4 rounded-2xl border shadow-2xl animate-slide-up backdrop-blur-xl ${status.type === 'success' ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-red-600/10 border-red-500 text-red-400'} text-[10px] font-black uppercase tracking-widest">${status.message}</div>`}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
+                        <!-- Main Content -->
                         <main className="lg:col-span-8">
-                            <section className="glass-panel p-8 md:p-10 rounded-[3rem] shadow-2xl space-y-8 min-h-[600px]">
-                                <h2 className="text-2xl font-black text-white uppercase tracking-tight border-b border-slate-800 pb-6">${activeTab} Manager</h2>
+                            <section className="glass-panel p-8 md:p-10 rounded-[3rem] shadow-2xl space-y-8 min-h-[600px] animate-slide-up">
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-6">
+                                    <h2 className="text-2xl font-black text-white uppercase tracking-tight">${activeTab} Manager</h2>
+                                    ${activeTab !== 'security' && html`
+                                        <button 
+                                            onClick=${() => {
+                                                if(activeTab === 'notice') setNoticeData({...noticeData, show: !noticeData.show});
+                                                else if(activeTab === 'announcement') setAnnouncementData({...announcementData, show: !announcementData.show});
+                                                else setEventsData({...eventsData, show: !eventsData.show});
+                                            }}
+                                            className=${`px-4 py-2 rounded-full text-[9px] font-black tracking-widest transition-all ${
+                                                (activeTab === 'notice' ? noticeData.show : activeTab === 'announcement' ? announcementData.show : eventsData.show) ? 'bg-green-600/10 text-green-400 border border-green-500' : 'bg-red-600/10 text-red-400 border border-red-500'
+                                            }`}
+                                        >
+                                            ${(activeTab === 'notice' ? noticeData.show : activeTab === 'announcement' ? announcementData.show : eventsData.show) ? '● LIVE' : '○ HIDDEN'}
+                                        </button>
+                                    `}
+                                </div>
 
-                                ${activeTab === 'keys' ? html`
-                                    <div className="space-y-6 animate-slide-up">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Manage Access Tokens</p>
-                                            <button onClick=${addKey} className="bg-orange-600 hover:bg-orange-500 px-6 py-2 rounded-xl text-[9px] font-black uppercase transition-all shadow-lg shadow-orange-900/20">+ Create New Token</button>
+                                ${activeTab === 'security' ? html`
+                                    ${!isSecurityUnlocked ? html`
+                                        <div className="py-20 flex flex-col items-center gap-6">
+                                            <div className="text-4xl">🔐</div>
+                                            <div className="text-center">
+                                                <h3 className="text-sm font-black text-white uppercase tracking-widest mb-2">Restricted Security Area</h3>
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Enter Master PIN to continue</p>
+                                            </div>
+                                            <form onSubmit=${handleUnlockSecurity} className="w-full max-w-xs space-y-4">
+                                                <input type="password" autoFocus value=${securityPinInput} onChange=${e => setSecurityPinInput(e.target.value)} className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-center font-mono tracking-widest text-lg outline-none focus:border-orange-500 text-white" placeholder="••••••••"/>
+                                                <button type="submit" className="w-full bg-white text-black font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all">Unlock System</button>
+                                            </form>
                                         </div>
-                                        <div className="space-y-4">
-                                            ${loginData.keys.map((k, i) => html`
-                                                <div key=${k.id} className="bg-black/40 p-6 rounded-3xl border border-slate-800 space-y-4 relative group hover:border-orange-500/30 transition-all">
-                                                    <button onClick=${() => { const updated = loginData.keys.filter(item => item.id !== k.id); setLoginData({...loginData, keys: updated}); }} className="absolute top-4 right-4 text-red-500 text-[10px] font-black opacity-0 group-hover:opacity-100 transition-opacity">DELETE</button>
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div>
-                                                            <label className="text-[8px] font-black text-slate-600 uppercase mb-1 block">Owner Name</label>
-                                                            <input value=${k.owner} onChange=${e => { const up = [...loginData.keys]; up[i].owner = e.target.value; setLoginData({...loginData, keys: up}); }} className="w-full bg-transparent border-b border-slate-800 p-2 text-sm font-bold text-white outline-none focus:border-orange-500 transition-all"/>
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-[8px] font-black text-slate-600 uppercase mb-1 block">Key Value</label>
-                                                            <input value=${k.key} onChange=${e => { const up = [...loginData.keys]; up[i].key = e.target.value; setLoginData({...loginData, keys: up}); }} className="w-full bg-transparent border-b border-slate-800 p-2 text-sm font-mono text-orange-400 outline-none focus:border-orange-500 transition-all"/>
-                                                        </div>
+                                    ` : html`
+                                        <div className="space-y-12 animate-slide-up">
+                                            <!-- GitHub Config -->
+                                            <div className="space-y-6">
+                                                <h3 className="text-[10px] font-black text-orange-500 uppercase tracking-widest pl-1">GitHub Integration</h3>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="md:col-span-2">
+                                                        <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block">Personal Access Token</label>
+                                                        <input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full bg-black p-4 rounded-2xl text-xs outline-none border border-slate-800 text-white focus:border-orange-500"/>
                                                     </div>
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="flex-1">
-                                                            <label className="text-[8px] font-black text-slate-600 uppercase mb-1 block">Expiration Date</label>
-                                                            <input type="date" value=${k.expiresAt} onChange=${e => { const up = [...loginData.keys]; up[i].expiresAt = e.target.value; setLoginData({...loginData, keys: up}); }} className="w-full bg-black/40 p-2 rounded-lg text-[9px] text-slate-400 border border-slate-800 outline-none focus:border-orange-500 transition-all"/>
-                                                        </div>
-                                                        <button onClick=${() => { const up = [...loginData.keys]; up[i].isActive = !up[i].isActive; setLoginData({...loginData, keys: up}); }} className=${`px-5 py-2 rounded-lg text-[9px] font-black uppercase mt-4 transition-all ${k.isActive ? 'bg-green-600/10 border border-green-500 text-green-400' : 'bg-red-600/10 border border-red-500 text-red-400'}`}>${k.isActive ? 'Access Active' : 'Access Revoked'}</button>
+                                                    <div>
+                                                        <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block">Repo Owner</label>
+                                                        <input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full bg-black p-4 rounded-2xl text-xs outline-none border border-slate-800 text-white focus:border-orange-500"/>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block">Repo Name</label>
+                                                        <input value=${config.repo} onChange=${e => setConfig({...config, repo: e.target.value})} className="w-full bg-black p-4 rounded-2xl text-xs outline-none border border-slate-800 text-white focus:border-orange-500"/>
                                                     </div>
                                                 </div>
-                                            `)}
-                                            ${loginData.keys.length === 0 && html`<div className="py-12 text-center text-[10px] font-black text-slate-700 uppercase italic tracking-widest border border-dashed border-slate-800 rounded-3xl">No keys registered yet</div>`}
-                                        </div>
-                                    </div>
-                                ` : activeTab === 'album' ? html`
-                                    <div className="space-y-12 animate-slide-up">
-                                        <!-- Album Presets -->
-                                        <div className="bg-black/40 p-6 rounded-3xl border border-slate-800/50 flex justify-between items-center">
-                                            <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest pl-2">Theme Selection</span>
-                                            <div className="flex gap-2">
-                                                ${THEME_PRESETS.map(p => html`<button key=${p.name} title=${p.name} onClick=${() => setAlbumData({...albumData, settings: {...albumData.settings, theme: {cardGradient: p.card, buttonGradient: p.btn}}})} className="color-bubble" style=${{background: p.btn}}></button>`)}
+                                            </div>
+
+                                            <!-- Keys Management -->
+                                            <div className="space-y-6 pt-12 border-t border-slate-800">
+                                                <div className="flex justify-between items-center">
+                                                    <h3 className="text-[10px] font-black text-orange-500 uppercase tracking-widest pl-1">Access Keys Manager</h3>
+                                                    <button onClick=${() => {
+                                                        const newK = { id: crypto.randomUUID(), key: 'RR-' + Math.random().toString(36).substring(2, 8).toUpperCase(), owner: 'New Admin', isActive: true };
+                                                        setLoginData({...loginData, keys: [newK, ...loginData.keys]});
+                                                    }} className="bg-orange-600 px-4 py-2 rounded-xl text-[8px] font-black uppercase">+ New Key</button>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    ${loginData.keys.map((k, i) => html`
+                                                        <div key=${k.id} className="bg-black/40 p-6 rounded-3xl border border-slate-800 flex flex-col md:flex-row gap-6 relative group">
+                                                            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                <div>
+                                                                    <label className="text-[8px] font-black text-slate-600 uppercase mb-1 block">Assigned Owner</label>
+                                                                    <input value=${k.owner} onChange=${e => { const up = [...loginData.keys]; up[i].owner = e.target.value; setLoginData({...loginData, keys: up}); }} className="w-full bg-transparent border-b border-slate-800 p-2 text-sm font-bold text-white outline-none focus:border-orange-500"/>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-[8px] font-black text-slate-600 uppercase mb-1 block">Key Code</label>
+                                                                    <input value=${k.key} onChange=${e => { const up = [...loginData.keys]; up[i].key = e.target.value; setLoginData({...loginData, keys: up}); }} className="w-full bg-transparent border-b border-slate-800 p-2 text-sm font-mono text-orange-400 outline-none focus:border-orange-500"/>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <button onClick=${() => { const up = [...loginData.keys]; up[i].isActive = !up[i].isActive; setLoginData({...loginData, keys: up}); }} className=${`px-4 py-2 rounded-lg text-[8px] font-black uppercase ${k.isActive ? 'bg-green-600/10 text-green-400' : 'bg-red-600/10 text-red-400'}`}>${k.isActive ? 'Active' : 'Locked'}</button>
+                                                                <button onClick=${() => { const up = loginData.keys.filter((_, idx) => idx !== i); setLoginData({...loginData, keys: up}); }} className="text-red-500 text-xs font-black">✕</button>
+                                                            </div>
+                                                        </div>
+                                                    `)}
+                                                </div>
                                             </div>
                                         </div>
-
-                                        <button onClick=${() => setAlbumData({...albumData, events: [{title: 'New Category', icon: '📁', description: 'Enter description...', images: []}, ...albumData.events]})} className="w-full py-6 border-2 border-dashed border-slate-800 rounded-[2.5rem] text-[11px] font-black uppercase text-slate-600 hover:text-orange-500 hover:border-orange-500 transition-all">+ Add New Event Category</button>
-                                        
+                                    `}
+                                ` : activeTab === 'events' ? html`
+                                    <div className="space-y-10 animate-slide-up">
+                                        <button onClick=${addEvent} className="w-full py-6 border-2 border-dashed border-slate-800 rounded-[2.5rem] text-[11px] font-black uppercase text-slate-600 hover:text-orange-500 hover:border-orange-500 transition-all">+ Add New Event Card</button>
                                         <div className="space-y-12">
-                                            ${albumData.events.map((ev, sIdx) => html`
-                                                <div key=${sIdx} className="bg-black/30 p-8 rounded-[3.5rem] border border-slate-800/40 space-y-8 animate-slide-up group">
-                                                    <div className="flex justify-between items-start">
-                                                        <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-6">
-                                                            <div className="md:col-span-2">
-                                                                <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block">Icon</label>
-                                                                <input value=${ev.icon} onChange=${e => { const up = [...albumData.events]; up[sIdx].icon = e.target.value; setAlbumData({...albumData, events: up}); }} className="w-full bg-black/50 border border-slate-800 p-4 rounded-2xl text-2xl text-center outline-none focus:border-orange-500"/>
-                                                            </div>
-                                                            <div className="md:col-span-10">
-                                                                <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block">Category Headline</label>
-                                                                <input value=${ev.title} onChange=${e => { const up = [...albumData.events]; up[sIdx].title = e.target.value; setAlbumData({...albumData, events: up}); }} className="w-full bg-transparent border-b border-slate-800 p-2 text-2xl font-black text-white outline-none focus:border-orange-500" placeholder="e.g. Traditional Day"/>
-                                                            </div>
-                                                            <div className="md:col-span-12">
-                                                                <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block">Short Description</label>
-                                                                <input value=${ev.description} onChange=${e => { const up = [...albumData.events]; up[sIdx].description = e.target.value; setAlbumData({...albumData, events: up}); }} className="w-full bg-transparent border-b border-slate-800 p-2 text-sm text-slate-500 outline-none focus:border-orange-500" placeholder="Brief context about this event..."/>
-                                                            </div>
+                                            ${eventsData.events.map((ev, i) => html`
+                                                <div key=${i} className="bg-black/30 p-8 rounded-[3.5rem] border border-slate-800 space-y-8 relative group">
+                                                    <button onClick=${() => removeEvent(i)} className="absolute top-6 right-6 text-red-500 font-black text-xs p-2">DELETE CARD</button>
+                                                    <div className="grid grid-cols-1 gap-6">
+                                                        <div>
+                                                            <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block pl-1">Card Title</label>
+                                                            <input value=${ev.title} onChange=${e => updateEvent(i, 'title', e.target.value)} className="w-full bg-transparent border-b border-slate-800 p-2 text-2xl font-black text-white outline-none focus:border-orange-500 transition-all"/>
                                                         </div>
-                                                        <button onClick=${() => { const up = albumData.events.filter((_, i) => i !== sIdx); setAlbumData({...albumData, events: up}); }} className="text-red-500 font-black text-xs hover:text-red-400 p-2">✕</button>
-                                                    </div>
-
-                                                    <div className="space-y-6 pt-6 border-t border-slate-800/30">
-                                                        <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-slate-500 tracking-widest pl-1">Photo Cards (${ev.images.length})</span><button onClick=${() => { const up = [...albumData.events]; up[sIdx].images.push({label: 'New Photo', labelIcon: '📸', src: '', downloadName: 'photo.jpg'}); setAlbumData({...albumData, events: up}); }} className="bg-orange-600 hover:bg-orange-500 px-5 py-2 rounded-xl text-[9px] font-black uppercase transition-all">+ Add Photo</button></div>
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                            ${ev.images.map((img, iIdx) => html`
-                                                                <div key=${iIdx} className="bg-black/60 p-6 rounded-[2.5rem] border border-slate-800/30 flex flex-col gap-4 relative group/card hover:border-orange-500/20 transition-all">
-                                                                    <button onClick=${() => { const up = [...albumData.events]; up[sIdx].images = up[sIdx].images.filter((_, i) => i !== iIdx); setAlbumData({...albumData, events: up}); }} className="absolute top-4 right-4 text-red-500 opacity-0 group-hover/card:opacity-100 transition-opacity p-2">✕</button>
-                                                                    <div className="flex gap-3">
-                                                                        <input value=${img.labelIcon} onChange=${e => { const up = [...albumData.events]; up[sIdx].images[iIdx].labelIcon = e.target.value; setAlbumData({...albumData, events: up}); }} className="w-10 bg-black/80 border border-slate-800 p-2 rounded-xl text-center outline-none focus:border-orange-500" placeholder="🤳"/>
-                                                                        <input value=${img.label} onChange=${e => { const up = [...albumData.events]; up[sIdx].images[iIdx].label = e.target.value; setAlbumData({...albumData, events: up}); }} className="flex-1 bg-transparent border-b border-slate-800 p-2 text-sm font-bold text-white outline-none focus:border-orange-500" placeholder="Card Label"/>
-                                                                    </div>
-                                                                    <div className="w-full h-40 bg-black/80 rounded-2xl border border-slate-800 overflow-hidden relative group/up">
-                                                                        ${img.src ? html`<img src=${img.src} className="w-full h-full object-cover"/>` : html`<div className="w-full h-full flex flex-col items-center justify-center gap-2"><span className="text-xl opacity-20">📸</span><span className="text-[7px] font-black text-slate-700 uppercase tracking-widest">No Media Set</span></div>`}
-                                                                        <label className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center opacity-0 group-hover/up:opacity-100 transition-opacity cursor-pointer text-[9px] font-black text-white uppercase tracking-widest">
-                                                                            <span className="mb-1">📤 Select File</span>
-                                                                            <input type="file" accept="image/*" className="hidden" onChange=${e => handleImageUpload(e, sIdx, iIdx)}/>
-                                                                        </label>
-                                                                    </div>
-                                                                    <input value=${img.downloadName} onChange=${e => { const up = [...albumData.events]; up[sIdx].images[iIdx].downloadName = e.target.value; setAlbumData({...albumData, events: up}); }} className="w-full bg-black/40 p-2 rounded-lg text-[9px] text-slate-500 border border-slate-800/50 outline-none" placeholder="Download filename..."/>
-                                                                </div>
-                                                            `)}
+                                                        <div>
+                                                            <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block pl-1">Content (New line for each point)</label>
+                                                            <textarea rows="6" value=${ev.content.join('\n')} onChange=${e => updateEvent(i, 'content', e.target.value)} className="w-full bg-black/40 border border-slate-800 p-5 rounded-3xl text-sm text-slate-300 outline-none focus:border-orange-500 resize-none custom-scrollbar transition-all leading-relaxed"/>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                                                            <div>
+                                                                <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block pl-1">Theme Start</label>
+                                                                <input type="color" value=${ev.theme?.gradient[0]} onChange=${e => { const up = [...eventsData.events]; up[i].theme.gradient[0] = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full h-10 bg-transparent rounded-lg cursor-pointer"/>
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block pl-1">Theme End</label>
+                                                                <input type="color" value=${ev.theme?.gradient[1]} onChange=${e => { const up = [...eventsData.events]; up[i].theme.gradient[1] = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full h-10 bg-transparent rounded-lg cursor-pointer"/>
+                                                            </div>
+                                                            <div className="md:col-span-2">
+                                                                <label className="text-[8px] font-black uppercase text-slate-600 mb-1 block pl-1">Glow Effect (CSS Value)</label>
+                                                                <input value=${ev.theme?.glow} onChange=${e => { const up = [...eventsData.events]; up[i].theme.glow = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full bg-black/40 border border-slate-800 p-2 rounded-xl text-[10px] text-slate-400 outline-none focus:border-orange-500"/>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             `)}
                                         </div>
                                     </div>
-                                ` : activeTab === 'notice' || activeTab === 'announcement' ? html`
+                                ` : html`
                                     <div className="space-y-8 animate-slide-up">
                                         <div>
                                             <label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Primary Headline</label>
                                             <input value=${activeTab === 'notice' ? noticeData.title : announcementData.title} onChange=${e => activeTab === 'notice' ? setNoticeData({...noticeData, title: e.target.value}) : setAnnouncementData({...announcementData, title: e.target.value})} className="w-full bg-black/40 border border-slate-800 p-5 rounded-3xl text-xl font-bold text-white outline-none focus:border-orange-500 transition-all"/>
                                         </div>
                                         <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Message Content</label>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Main Message</label>
                                             <textarea rows="12" value=${activeTab === 'notice' ? noticeData.message.join('\n') : announcementData.message} onChange=${e => activeTab === 'notice' ? setNoticeData({...noticeData, message: e.target.value.split('\n')}) : setAnnouncementData({...announcementData, message: e.target.value})} className="w-full bg-black/40 border border-slate-800 p-5 rounded-3xl text-sm text-slate-300 outline-none focus:border-orange-500 resize-none custom-scrollbar transition-all leading-relaxed"/>
                                         </div>
                                     </div>
-                                ` : html`<div className="py-24 text-center text-slate-800 uppercase text-[10px] font-black italic opacity-20 tracking-[0.5em]">Module Under Maintenance</div>`}
+                                `}
 
-                                <button onClick=${handlePublish} disabled=${loading} className="w-full mt-12 py-6 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black text-xl rounded-3xl shadow-2xl uppercase tracking-[0.3em] transition-all hover:scale-[1.01] active:scale-[0.98] disabled:opacity-30">
-                                    ${loading ? html`<div className="loader mx-auto"></div>` : '🚀 Push Live Updates'}
+                                <button onClick=${handlePublish} disabled=${loading} className="w-full mt-12 py-6 bg-gradient-to-r from-orange-600 to-amber-500 text-white font-black text-xl rounded-3xl shadow-2xl uppercase tracking-[0.3em] transition-all hover:scale-[1.01] active:scale-[0.98] disabled:opacity-30">
+                                    ${loading ? html`<div className="loader mx-auto"></div>` : '🚀 PUSH LIVE UPDATES'}
                                 </button>
                             </section>
                         </main>
 
+                        <!-- Preview Sidebar -->
                         <aside className="lg:col-span-4 space-y-8">
                             <section className="glass-panel p-8 rounded-[3rem] sticky top-8 flex flex-col h-[calc(100vh-6rem)] overflow-hidden">
                                 <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-8 flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Dynamic Preview</h3>
                                 <div className="flex-1 bg-[#080a0e] rounded-[2.5rem] p-5 overflow-y-auto custom-scrollbar shadow-inner flex flex-col gap-8">
-                                    ${activeTab === 'album' ? albumData.events.map((ev, i) => html`
-                                        <div key=${i} className="space-y-4 animate-slide-up">
-                                            <div className="flex items-center gap-2"><span className="text-2xl">${ev.icon}</span><h4 className="text-lg font-black text-white">${ev.title || 'Event'}</h4></div>
-                                            <p className="text-[11px] text-slate-500 leading-relaxed font-medium pl-1">${ev.description}</p>
-                                            <div className="space-y-6">
-                                                ${ev.images.map((img, ii) => html`
-                                                    <div key=${ii} className="p-6 rounded-[2.5rem] border border-white/5 shadow-2xl text-center relative overflow-hidden group/prev" style=${{background: albumData.settings?.theme?.cardGradient || '#161a22'}}>
-                                                        <h5 className="text-[12px] font-black text-white uppercase mb-4 flex items-center justify-center gap-2"><span>${img.labelIcon}</span> ${img.label || 'Photo'}</h5>
-                                                        <div className="aspect-[4/3] bg-black/40 rounded-2xl overflow-hidden mb-5 border border-slate-800/50">${img.src ? html`<img src=${img.src} className="w-full h-full object-cover"/>` : ''}</div>
-                                                        <div className="px-8 py-3 rounded-full text-[10px] font-black text-white uppercase tracking-widest shadow-xl cursor-default transition-all" style=${{background: albumData.settings?.theme?.buttonGradient || '#f97316'}}>↓ Download</div>
-                                                    </div>
-                                                `)}
+                                    ${activeTab === 'events' ? eventsData.events.map((ev, i) => html`
+                                        <div key=${i} className="event-card-preview p-8 rounded-[2.5rem] text-white shadow-2xl animate-slide-up" style=${{
+                                            background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(', ') || '#161a22, #0d1117'})`,
+                                            boxShadow: `0 10px 40px ${ev.theme?.glow || 'transparent'}`
+                                        }}>
+                                            <h4 className="text-xl font-black uppercase mb-4 leading-tight">${ev.title || 'Event Title'}</h4>
+                                            <div className="space-y-2">
+                                                ${ev.content.map((l, ii) => html`<p key=${ii} className="text-[11px] font-medium opacity-90 leading-relaxed">• ${l}</p>`)}
                                             </div>
                                         </div>
                                     `) : activeTab === 'notice' ? html`
                                         <div className="w-full bg-[#161a22] p-6 rounded-[2.5rem] border border-slate-800 relative overflow-hidden animate-slide-up shadow-2xl">
                                             <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
-                                            <h4 className="text-orange-500 font-black text-xl uppercase tracking-tight mb-4 break-words">${noticeData.title || 'Notice Board'}</h4>
+                                            <h4 className="text-orange-500 font-black text-xl uppercase tracking-tight mb-4 break-words">${noticeData.title || 'New Notice'}</h4>
                                             <div className="space-y-3 leading-relaxed">${noticeData.message.map((l,i) => html`<p key=${i} className="text-slate-400 text-xs font-medium break-words">${l}</p>`)}</div>
                                         </div>
-                                    ` : html`<div className="h-full flex flex-col items-center justify-center text-center p-8"><span className="text-4xl opacity-10 mb-4">✨</span><p className="text-[10px] font-black text-slate-800 uppercase italic tracking-[0.4em] leading-relaxed">System monitoring in progress...</p></div>`}
+                                    ` : activeTab === 'announcement' ? html`
+                                        <div className="bg-[#1e2329] p-8 rounded-[2.5rem] border border-slate-700 text-center shadow-2xl animate-slide-up">
+                                            <div className="text-4xl mb-6">📢</div>
+                                            <h4 className="text-white font-black text-xl uppercase mb-4">${announcementData.title || 'System Alert'}</h4>
+                                            <p className="text-slate-400 text-xs leading-relaxed mb-8">${announcementData.message || 'Pop-up content goes here...'}</p>
+                                            <div className="py-3 bg-orange-600 text-white text-[9px] font-black uppercase rounded-2xl tracking-widest shadow-xl">Dismiss Preview</div>
+                                        </div>
+                                    ` : html`<div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-20 italic font-black text-[10px] uppercase tracking-[0.5em] text-slate-700">System Monitoring Active</div>`}
                                 </div>
                             </section>
                         </aside>
