@@ -516,7 +516,7 @@
                         <aside className="lg:col-span-4 space-y-8">
                             <section className="glass-panel p-8 rounded-[3rem] sticky top-8 flex flex-col h-[calc(100vh-6rem)] overflow-hidden">
                                 <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-10 flex items-center gap-3"><span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span> Dynamic Preview</h3>
-                                <div className="flex-1 bg-[#080a0e] rounded-[2.5rem] p-6 overflow-y-auto custom-scrollbar shadow-inner space-y-8">
+                                <div className="flex-1 bg-[#080a0e] rounded-[2.5rem] p-6 overflow-y-auto custom-scrollbar shadow-inner flex flex-col items-center justify-center space-y-8">
                                     ${activeTab === 'notice' ? html`
                                         <div className="w-full bg-[#161a22] p-8 rounded-[2.5rem] border border-slate-800 relative overflow-hidden animate-slide-up shadow-2xl">
                                             <div className="absolute top-0 left-0 w-full h-1.5 bg-orange-600"></div>
@@ -530,14 +530,17 @@
                                             `}
                                         </div>
                                     ` : activeTab === 'popup' ? html`
-                                        <div className="bg-[#1e2329] p-10 rounded-[3rem] border border-slate-700 text-center shadow-2xl animate-slide-up relative mt-6">
-                                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center text-4xl shadow-xl shadow-orange-900/40">📢</div>
-                                            <h4 className="text-white font-black text-2xl uppercase mt-8 mb-4">${announcementData.title || 'POPUP HEADLINE'}</h4>
-                                            <p className="text-slate-400 text-sm leading-relaxed mb-8">${announcementData.message || 'Announcement message content...'}</p>
-                                            <button className="w-full py-4 bg-slate-800/50 text-slate-500 text-[10px] font-black uppercase rounded-2xl tracking-[0.2em] cursor-default">PREVIEW ONLY</button>
+                                        <div className="w-full max-w-[320px] bg-gradient-to-br from-orange-500 to-amber-600 p-8 rounded-[3rem] text-center shadow-[0_0_50px_rgba(249,115,22,0.4)] animate-slide-up relative">
+                                            <h4 className="text-white font-black text-3xl uppercase mb-6 tracking-tighter">${announcementData.title || 'UPDATE'}</h4>
+                                            <div className="flex items-center justify-center gap-2 mb-8">
+                                                <span className="text-white text-sm font-bold leading-relaxed">📍 ${announcementData.message || 'Welcome to RR Events App'}</span>
+                                            </div>
+                                            <button className="w-full py-5 bg-black text-white font-black rounded-[2rem] text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all">
+                                                OK, GOT IT 👍
+                                            </button>
                                         </div>
                                     ` : activeTab === 'events' ? eventsData.events.map((ev, i) => html`
-                                        <div key=${i} className="p-10 rounded-[3rem] text-white shadow-2xl animate-slide-up" style=${{ background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(', ') || '#161a22, #0d1117'})`, boxShadow: `0 20px 60px ${ev.theme?.glow || 'transparent'}` }}>
+                                        <div key=${i} className="w-full p-10 rounded-[3rem] text-white shadow-2xl animate-slide-up" style=${{ background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(', ') || '#161a22, #0d1117'})`, boxShadow: `0 20px 60px ${ev.theme?.glow || 'transparent'}` }}>
                                             <h4 className="text-2xl font-black uppercase mb-6 leading-tight">${ev.title || 'EVENT TITLE'}</h4>
                                             <div className="space-y-3">${ev.content.map((l, ii) => html`<p key=${ii} className="text-[12px] font-medium opacity-90 tracking-tight">• ${l}</p>`)}</div>
                                         </div>
