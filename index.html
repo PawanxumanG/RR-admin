@@ -114,12 +114,19 @@
                     const res = await fetch(url, {
                         headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' }
                     });
-                    if (!res.ok) throw new Error('Could not verify access key. Check GitHub config.');
+                    if (!res.ok) throw new Error('Authentication failed. Check GitHub integration.');
                     const data = await res.json();
                     const content = JSON.parse(safeB64Decode(data.content));
                     
                     const validKey = content.keys.find(k => k.key === loginKeyInput && k.isActive);
                     if (validKey) {
+                        // Check expiry
+                        if (validKey.expiresAt) {
+                            const expiryDate = new Date(validKey.expiresAt);
+                            if (new Date() > expiryDate) {
+                                throw new Error('Access Key has expired.');
+                            }
+                        }
                         setIsLoggedIn(true);
                         localStorage.setItem('rr_admin_session_v2', 'active');
                         notify('success', `Welcome, ${validKey.owner}`);
@@ -244,13 +251,24 @@
                 else if(activeTab === 'events') setEventsData({...eventsData, show: !eventsData.show});
             };
 
+            const addEvent = () => {
+                setEventsData({
+                    ...eventsData, 
+                    events: [{
+                        title: 'New College Event', 
+                        content: ['Detail point here'], 
+                        theme: {gradient: ["#ff9800", "#ff5722"], glow: "rgba(255,152,0,0.5)"}
+                    }, ...eventsData.events]
+                });
+            };
+
             if (!isLoggedIn) {
                 return html`
                     <div className="min-h-screen flex items-center justify-center p-6 bg-[#080a0e]">
                         <div className="glass-panel w-full max-w-md p-10 rounded-[3rem] animate-slide-up text-center border-orange-500/20 shadow-2xl">
                             <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl text-white mx-auto shadow-2xl mb-8">RR</div>
                             <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-2">RR College Admin</h2>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] mb-12">Portal v3.9</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] mb-12">Portal v4.0</p>
                             
                             <form onSubmit=${handleLogin} className="space-y-4">
                                 <input 
@@ -278,7 +296,7 @@
                             <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl shadow-orange-900/40">RR</div>
                             <div>
                                 <h1 className="text-lg font-black text-white leading-tight">RR College Admin</h1>
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Management Suite v3.9</p>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Management Suite v4.0</p>
                             </div>
                         </div>
 
@@ -330,7 +348,7 @@
                                     ` : html`
                                         <div className="space-y-12 animate-slide-up">
                                             <div className="space-y-6">
-                                                <h3 className="text-xs font-black text-orange-500 uppercase tracking-widest">GitHub Configuration</h3>
+                                                <h3 className="text-xs font-black text-orange-500 uppercase tracking-widest pl-1">GitHub Configuration</h3>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     <div className="md:col-span-2"><label className="text-[8px] font-black uppercase text-slate-600 block pl-1">Access Token</label><input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-xl text-xs text-white"/></div>
                                                     <div><label className="text-[8px] font-black uppercase text-slate-600 block pl-1">Owner</label><input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-xl text-xs text-white"/></div>
@@ -338,16 +356,28 @@
                                                 </div>
                                             </div>
                                             <div className="space-y-6 pt-10 border-t border-slate-800">
-                                                <div className="flex justify-between items-center"><h3 className="text-xs font-black text-orange-500 uppercase tracking-widest">Keys Manager</h3><button onClick=${() => setLoginData({...loginData, keys: [{id: crypto.randomUUID(), key: 'RR-'+Math.random().toString(36).substring(2,8).toUpperCase(), owner: 'New Admin', isActive: true}, ...loginData.keys]})} className="bg-orange-600 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest">+ New Key</button></div>
+                                                <div className="flex justify-between items-center"><h3 className="text-xs font-black text-orange-500 uppercase tracking-widest">Keys Manager</h3><button onClick=${() => setLoginData({...loginData, keys: [{id: crypto.randomUUID(), key: 'RR-'+Math.random().toString(36).substring(2,8).toUpperCase(), owner: 'New Admin', isActive: true, expiresAt: ''}, ...loginData.keys]})} className="bg-orange-600 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest">+ New Key</button></div>
                                                 <div className="space-y-3">
                                                     ${loginData.keys.map((k, idx) => html`
-                                                        <div key=${k.id} className="bg-black/40 p-5 rounded-2xl border border-slate-800 flex items-center gap-4">
-                                                            <div className="flex-1 grid grid-cols-2 gap-4">
-                                                                <input value=${k.owner} onChange=${e => { const up = [...loginData.keys]; up[idx].owner = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-xs font-bold text-white outline-none focus:border-orange-500 p-1"/>
-                                                                <input value=${k.key} onChange=${e => { const up = [...loginData.keys]; up[idx].key = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-xs font-mono text-orange-400 outline-none focus:border-orange-500 p-1"/>
+                                                        <div key=${k.id} className="bg-black/40 p-5 rounded-2xl border border-slate-800 flex flex-col gap-4">
+                                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                                <div>
+                                                                    <label className="text-[7px] font-black uppercase text-slate-600 block mb-1">Owner</label>
+                                                                    <input value=${k.owner} onChange=${e => { const up = [...loginData.keys]; up[idx].owner = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-xs font-bold text-white outline-none focus:border-orange-500 w-full" placeholder="Name"/>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-[7px] font-black uppercase text-slate-600 block mb-1">Key Code</label>
+                                                                    <input value=${k.key} onChange=${e => { const up = [...loginData.keys]; up[idx].key = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-xs font-mono text-orange-400 outline-none focus:border-orange-500 w-full" placeholder="RR-XXXX"/>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-[7px] font-black uppercase text-slate-600 block mb-1">Expiry Date</label>
+                                                                    <input type="date" value=${k.expiresAt || ''} onChange=${e => { const up = [...loginData.keys]; up[idx].expiresAt = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-xs text-slate-300 outline-none focus:border-orange-500 w-full"/>
+                                                                </div>
                                                             </div>
-                                                            <button onClick=${() => { const up = [...loginData.keys]; up[idx].isActive = !up[idx].isActive; setLoginData({...loginData, keys: up}); }} className=${`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase ${k.isActive ? 'bg-green-600/10 text-green-400' : 'bg-red-600/10 text-red-400'}`}>${k.isActive ? 'Active' : 'Locked'}</button>
-                                                            <button onClick=${() => setLoginData({...loginData, keys: loginData.keys.filter((_, i) => i !== idx)})} className="text-red-500 p-1">✕</button>
+                                                            <div className="flex justify-end gap-2 items-center">
+                                                                <button onClick=${() => { const up = [...loginData.keys]; up[idx].isActive = !up[idx].isActive; setLoginData({...loginData, keys: up}); }} className=${`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase ${k.isActive ? 'bg-green-600/10 text-green-400' : 'bg-red-600/10 text-red-400'}`}>${k.isActive ? 'Active' : 'Locked'}</button>
+                                                                <button onClick=${() => setLoginData({...loginData, keys: loginData.keys.filter((_, i) => i !== idx)})} className="text-red-500 p-1">✕</button>
+                                                            </div>
                                                         </div>
                                                     `)}
                                                 </div>
@@ -367,9 +397,39 @@
                                         </div>
                                     </div>
                                 ` : activeTab === 'events' ? html`
-                                    <div className="space-y-10 animate-slide-up flex-1"><button onClick=${() => setEventsData({...eventsData, events: [{title: 'New Event', content: ['Detail 1'], theme: {gradient: ["#ff9800", "#ff5722"], glow: "rgba(255,152,0,0.5)"}}, ...eventsData.events]})} className="w-full py-4 border-2 border-dashed border-slate-800 rounded-3xl text-slate-600 hover:text-orange-500 hover:border-orange-500 transition-all font-black uppercase tracking-widest text-[10px]">+ Add New Event Card</button><div className="space-y-10">${eventsData.events.map((ev, i) => html`<div key=${i} className="bg-black/40 p-6 rounded-[2rem] border border-slate-800 relative group/card"><button onClick=${() => setEventsData({...eventsData, events: eventsData.events.filter((_, idx) => idx !== i)})} className="absolute top-4 right-4 text-red-500 opacity-0 group-hover/card:opacity-100 transition-opacity">✕</button><div className="grid grid-cols-1 gap-6"><div><input value=${ev.title} onChange=${e => { const up = [...eventsData.events]; up[i].title = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full bg-transparent border-b border-slate-800 p-2 text-xl font-black text-white outline-none focus:border-orange-500"/></div><div><textarea value=${ev.content.join('\n')} onChange=${e => { const up = [...eventsData.events]; up[i].content = e.target.value.split('\n'); setEventsData({...eventsData, events: up}); }} rows="4" className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-xl text-xs text-slate-400 outline-none focus:border-orange-500 resize-none"/></div></div></div>`)}</div></div>
+                                    <div className="space-y-10 animate-slide-up flex-1">
+                                        <button onClick=${addEvent} className="w-full py-4 border-2 border-dashed border-slate-800 rounded-3xl text-slate-600 hover:text-orange-500 hover:border-orange-500 transition-all font-black uppercase tracking-widest text-[10px]">+ Add New Event Card</button>
+                                        <div className="space-y-10">
+                                            ${eventsData.events.map((ev, i) => html`
+                                                <div key=${i} className="bg-black/40 p-6 rounded-[2rem] border border-slate-800 relative group/card">
+                                                    <button onClick=${() => setEventsData({...eventsData, events: eventsData.events.filter((_, idx) => idx !== i)})} className="absolute top-4 right-4 text-red-500 opacity-0 group-hover/card:opacity-100 transition-opacity">✕</button>
+                                                    <div className="grid grid-cols-1 gap-6">
+                                                        <div><label className="text-[8px] font-black uppercase text-slate-600 block pl-1 mb-1">Headline</label><input value=${ev.title} onChange=${e => { const up = [...eventsData.events]; up[i].title = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-xl text-lg font-bold text-white outline-none focus:border-orange-500"/></div>
+                                                        <div><label className="text-[8px] font-black uppercase text-slate-600 block pl-1 mb-1">Description (Bullets)</label><textarea value=${ev.content.join('\n')} onChange=${e => { const up = [...eventsData.events]; up[i].content = e.target.value.split('\n'); setEventsData({...eventsData, events: up}); }} rows="4" className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-xl text-xs text-slate-400 outline-none focus:border-orange-500 resize-none"/></div>
+                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                            <div>
+                                                                <label className="text-[7px] font-black uppercase text-slate-600 block pl-1 mb-1">Color 1</label>
+                                                                <input type="color" value=${ev.theme?.gradient[0]} onChange=${e => { const up = [...eventsData.events]; up[i].theme.gradient[0] = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full h-10 bg-transparent cursor-pointer rounded-lg border-none"/>
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[7px] font-black uppercase text-slate-600 block pl-1 mb-1">Color 2</label>
+                                                                <input type="color" value=${ev.theme?.gradient[1]} onChange=${e => { const up = [...eventsData.events]; up[i].theme.gradient[1] = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full h-10 bg-transparent cursor-pointer rounded-lg border-none"/>
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[7px] font-black uppercase text-slate-600 block pl-1 mb-1">Glow Effect</label>
+                                                                <input value=${ev.theme?.glow} onChange=${e => { const up = [...eventsData.events]; up[i].theme.glow = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full bg-black/60 border border-slate-800 p-2 rounded-xl text-[9px] text-white outline-none" placeholder="rgba(255,152,0,0.5)"/>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `)}
+                                        </div>
+                                    </div>
                                 ` : html`
-                                    <div className="space-y-8 animate-slide-up flex-1"><div><label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Headline</label><input value=${announcementData.title} onChange=${e => setAnnouncementData({...announcementData, title: e.target.value})} className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-xl font-bold text-white outline-none focus:border-orange-500"/></div><div><label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Message</label><textarea rows="10" value=${announcementData.message} onChange=${e => setAnnouncementData({...announcementData, message: e.target.value})} className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-sm text-slate-300 outline-none focus:border-orange-500 resize-none leading-relaxed"/></div></div>
+                                    <div className="space-y-8 animate-slide-up flex-1">
+                                        <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Headline</label><input value=${announcementData.title} onChange=${e => setAnnouncementData({...announcementData, title: e.target.value})} className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-xl font-bold text-white outline-none focus:border-orange-500"/></div>
+                                        <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Message</label><textarea rows="10" value=${announcementData.message} onChange=${e => setAnnouncementData({...announcementData, message: e.target.value})} className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-sm text-slate-300 outline-none focus:border-orange-500 resize-none leading-relaxed"/></div>
+                                    </div>
                                 `}
 
                                 <button onClick=${handlePublish} disabled=${loading} className="w-full mt-auto py-6 bg-gradient-to-r from-orange-600 to-amber-500 text-white font-black text-xl rounded-3xl shadow-2xl uppercase tracking-[0.2em] transition-all hover:scale-[1.01] active:scale-[0.98] disabled:opacity-30">
@@ -393,6 +453,13 @@
                                                     <div className="flex flex-col gap-1">${(noticeData.updates.items || []).map((it, ii) => html`<span key=${ii} className="text-slate-500 text-[8px] font-black uppercase">• ${it}</span>`)}</div>
                                                 </div>
                                             `}
+                                        </div>
+                                    ` : activeTab === 'announcement' ? html`
+                                        <div className="bg-[#1e2329] p-8 rounded-[2.5rem] border border-slate-700 text-center shadow-2xl shadow-orange-900/10 animate-slide-up">
+                                            <div className="text-4xl mb-6">📢</div>
+                                            <h4 className="text-white font-black text-xl uppercase mb-4">${announcementData.title || 'Announcement'}</h4>
+                                            <p className="text-slate-400 text-xs leading-relaxed mb-8">${announcementData.message || 'Announcement message content goes here...'}</p>
+                                            <div className="py-3 bg-orange-600 text-white text-[9px] font-black uppercase rounded-2xl tracking-widest shadow-xl cursor-default">Dismiss Preview</div>
                                         </div>
                                     ` : activeTab === 'events' ? eventsData.events.map((ev, i) => html`<div key=${i} className="p-8 rounded-[2.5rem] text-white shadow-2xl animate-slide-up" style=${{ background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(', ') || '#161a22, #0d1117'})`, boxShadow: `0 10px 40px ${ev.theme?.glow || 'transparent'}` }}><h4 className="text-xl font-black uppercase mb-4 leading-tight">${ev.title || 'Event'}</h4><div className="space-y-2">${ev.content.map((l, ii) => html`<p key=${ii} className="text-[11px] font-medium opacity-90 leading-relaxed">• ${l}</p>`)}</div></div>`) : html`<div className="h-full flex flex-col items-center justify-center opacity-10 italic font-black text-[10px] uppercase tracking-[0.5em] text-center">Preview Monitor Active</div>`}
                                 </div>
