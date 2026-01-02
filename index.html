@@ -49,6 +49,9 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        input:focus, textarea:focus {
+            box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+        }
     </style>
     <script type="importmap">
     {
@@ -78,6 +81,7 @@
         const App = () => {
             const [activeTab, setActiveTab] = useState('notice'); 
             const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem('rr_admin_session_v2') === 'active');
+            const [currentUser, setCurrentUser] = useState(() => localStorage.getItem('rr_admin_user') || 'ADMIN');
             const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(false);
             const [loginKeyInput, setLoginKeyInput] = useState('');
             const [securityPinInput, setSecurityPinInput] = useState('');
@@ -93,7 +97,8 @@
             const [eventsData, setEventsData] = useState({ show: true, events: [] });
             const [loginData, setLoginData] = useState({ keys: [] });
 
-            const [shas, setShas] = useState({ notice: null, announcement: null, events: null, login: null });
+            // Using a single state for SHAs to avoid race conditions
+            const [shas, setShas] = useState({ notice: null, announcement: null, events: null, security: null });
             const [loading, setLoading] = useState(false);
             const [status, setStatus] = useState(null);
 
@@ -103,34 +108,34 @@
 
             const notify = (type, message) => {
                 setStatus({ type, message });
-                setTimeout(() => setStatus(null), 5000);
+                setTimeout(() => setStatus(null), 6000);
             };
 
             const handleLogin = async (e) => {
                 e.preventDefault();
+                if (!loginKeyInput) return notify('error', 'Please enter an Access Key.');
                 setLoading(true);
                 try {
                     const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/login.json`;
                     const res = await fetch(url, {
                         headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' }
                     });
-                    if (!res.ok) throw new Error('Authentication failed. Check GitHub integration.');
+                    if (!res.ok) throw new Error('Auth fetch failed. Check your GitHub config.');
                     const data = await res.json();
                     const content = JSON.parse(safeB64Decode(data.content));
                     
                     const validKey = content.keys.find(k => k.key === loginKeyInput && k.isActive);
                     if (validKey) {
-                        if (validKey.expiresAt) {
-                            const expiryDate = new Date(validKey.expiresAt);
-                            if (new Date() > expiryDate) {
-                                throw new Error('Access Key has expired.');
-                            }
+                        if (validKey.expiresAt && new Date() > new Date(validKey.expiresAt)) {
+                            throw new Error('This Access Key has expired.');
                         }
                         setIsLoggedIn(true);
+                        setCurrentUser(validKey.owner);
                         localStorage.setItem('rr_admin_session_v2', 'active');
-                        notify('success', `Welcome, ${validKey.owner}`);
+                        localStorage.setItem('rr_admin_user', validKey.owner);
+                        notify('success', `Access Granted: ${validKey.owner}`);
                     } else {
-                        notify('error', 'Invalid Access Key.');
+                        notify('error', 'Invalid or Inactive Access Key.');
                     }
                 } catch (err) {
                     notify('error', err.message);
@@ -141,12 +146,14 @@
 
             const handleLogout = () => {
                 setIsLoggedIn(false);
+                setIsSecurityUnlocked(false);
                 localStorage.removeItem('rr_admin_session_v2');
+                localStorage.removeItem('rr_admin_user');
             };
 
             const handleSync = async (targetTab = activeTab) => {
                 if (!config.token || !config.owner || !config.repo) {
-                    notify('error', 'Security settings required.');
+                    notify('error', 'GitHub Configuration is missing.');
                     return;
                 }
                 setLoading(true);
@@ -157,16 +164,16 @@
                     const res = await fetch(url, {
                         headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' }
                     });
-                    if (!res.ok) throw new Error(`Fetch failed for ${path}.`);
+                    if (!res.ok) throw new Error(`Could not find ${path} on GitHub.`);
                     const data = await res.json();
                     const content = JSON.parse(safeB64Decode(data.content));
                     
                     if (targetTab === 'notice') { setNoticeData(content); setShas(p => ({...p, notice: data.sha})); }
                     else if (targetTab === 'announcement') { setAnnouncementData(content); setShas(p => ({...p, announcement: data.sha})); }
                     else if (targetTab === 'events') { setEventsData(content); setShas(p => ({...p, events: data.sha})); }
-                    else if (targetTab === 'security') { setLoginData(content); setShas(p => ({...p, login: data.sha})); }
+                    else if (targetTab === 'security') { setLoginData(content); setShas(p => ({...p, security: data.sha})); }
                     
-                    notify('success', `${targetTab} synced.`);
+                    notify('success', `Synced ${path} from GitHub.`);
                 } catch (err) {
                     notify('error', err.message);
                 } finally {
@@ -177,11 +184,10 @@
             const handlePublish = async () => {
                 const mapping = { notice: 'notice.json', announcement: 'announcement.json', events: 'events.json', security: 'login.json' };
                 const path = mapping[activeTab];
-                const shaKey = activeTab === 'security' ? 'login' : activeTab;
-                const currentSha = shas[shaKey];
+                const currentSha = shas[activeTab];
 
                 if (!config.token || !currentSha) {
-                    notify('error', 'Sync data before publishing.');
+                    notify('error', 'Sync data from GitHub before applying live changes.');
                     return;
                 }
                 setLoading(true);
@@ -190,7 +196,7 @@
                 try {
                     const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`;
                     const body = {
-                        message: `Admin Update: ${activeTab}`,
+                        message: `Admin Panel Update: ${path} by ${currentUser}`,
                         content: safeB64Encode(JSON.stringify(currentData, null, 2)),
                         sha: currentSha
                     };
@@ -199,10 +205,11 @@
                         headers: { 'Authorization': `token ${config.token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify(body)
                     });
-                    if (!res.ok) throw new Error('Update failed.');
                     const resData = await res.json();
-                    setShas(prev => ({ ...prev, [shaKey]: resData.content.sha }));
-                    notify('success', 'Changes are live!');
+                    if (!res.ok) throw new Error(resData.message || 'GitHub update failed.');
+                    
+                    setShas(prev => ({ ...prev, [activeTab]: resData.content.sha }));
+                    notify('success', `Successfully updated ${path}! Changes are now live.`);
                 } catch (err) {
                     notify('error', err.message);
                 } finally {
@@ -250,24 +257,13 @@
                 else if(activeTab === 'events') setEventsData({...eventsData, show: !eventsData.show});
             };
 
-            const addEvent = () => {
-                setEventsData({
-                    ...eventsData, 
-                    events: [{
-                        title: 'New College Event', 
-                        content: ['Detail point here'], 
-                        theme: {gradient: ["#ff9800", "#ff5722"], glow: "rgba(255,152,0,0.5)"}
-                    }, ...eventsData.events]
-                });
-            };
-
             if (!isLoggedIn) {
                 return html`
                     <div className="min-h-screen flex items-center justify-center p-6 bg-[#080a0e]">
                         <div className="glass-panel w-full max-w-md p-10 rounded-[3rem] animate-slide-up text-center border-orange-500/20 shadow-2xl">
                             <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl text-white mx-auto shadow-2xl mb-8">RR</div>
                             <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-2">RR College Admin</h2>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] mb-12">Portal v4.0</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] mb-12">Management Suite v4.0</p>
                             
                             <form onSubmit=${handleLogin} className="space-y-4">
                                 <input 
@@ -283,23 +279,24 @@
                             </form>
                             <p className="mt-8 text-[8px] text-slate-700 font-bold uppercase tracking-widest">Master Admin Protected</p>
                         </div>
-                        ${status && html`<div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 bg-red-600/10 border border-red-500 text-red-400 rounded-full text-[10px] font-black uppercase tracking-widest animate-slide-up">${status.message}</div>`}
+                        ${status && html`<div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 bg-red-600/10 border border-red-500 text-red-400 rounded-full text-[10px] font-black uppercase tracking-widest animate-slide-up shadow-2xl z-50">${status.message}</div>`}
                     </div>
                 `;
             }
 
             return html`
                 <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-6">
-                    <header className="flex flex-col lg:flex-row justify-between items-center gap-6 bg-[#161b22] p-5 rounded-[2.5rem] border border-slate-800 shadow-2xl">
+                    <!-- Header -->
+                    <header className="flex flex-col lg:flex-row justify-between items-center gap-6 bg-[#161b22] p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
                         <div className="flex items-center gap-4">
-                            <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl shadow-orange-900/40">RR</div>
+                            <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl text-white shadow-xl shadow-orange-900/40">RR</div>
                             <div>
-                                <h1 className="text-lg font-black text-white leading-tight">RR College Admin</h1>
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Management Suite v4.0</p>
+                                <h1 className="text-xl font-black text-white tracking-tight">RR College Admin</h1>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">Management Suite v4.0</p>
                             </div>
                         </div>
 
-                        <nav className="bg-black/40 p-1 rounded-2xl flex flex-wrap justify-center gap-1 border border-slate-800/50">
+                        <nav className="bg-black/40 p-1.5 rounded-2xl flex flex-wrap justify-center gap-1 border border-slate-800/50">
                             ${['notice', 'announcement', 'events', 'security'].map(tab => html`
                                 <button key=${tab} onClick=${() => { setActiveTab(tab); if(tab !== 'security') setIsSecurityUnlocked(false); }} className=${`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
                                     ${tab === 'security' ? '🔒 Security' : tab}
@@ -307,16 +304,16 @@
                             `)}
                         </nav>
 
-                        <div className="flex flex-col items-end gap-2">
+                        <div className="flex flex-col items-center lg:items-end gap-3">
                             <div className="flex gap-2">
                                 <button onClick=${handleLogout} className="px-5 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-[9px] font-black text-slate-400 hover:text-white uppercase transition-all">Logout</button>
-                                <button onClick=${() => handleSync()} disabled=${loading} className="px-5 py-3 bg-blue-600 rounded-2xl text-[9px] font-black text-white shadow-lg uppercase flex items-center gap-2">
-                                    ${loading ? html`<div className="loader"></div>` : '🔄 Sync Live'}
+                                <button onClick=${() => handleSync()} disabled=${loading} className="px-5 py-3 bg-[#3366ff] hover:bg-[#2255ee] rounded-2xl text-[9px] font-black text-white shadow-lg uppercase flex items-center gap-2 transition-all">
+                                    ${loading ? html`<div className="loader"></div>` : html`🔄 Sync Live`}
                                 </button>
                             </div>
                             <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">PAWAN PONNAM</span>
-                                <a href="https://wa.me/919867637326" target="_blank" className="bg-green-600 hover:bg-green-500 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg shadow-lg shadow-green-900/20 flex items-center gap-1.5 transition-all">
+                                <span className="text-[11px] font-black text-slate-600 tracking-widest">PAWAN PONNAM</span>
+                                <a href="https://wa.me/919867637326" target="_blank" className="bg-[#25D366] hover:bg-[#1db954] text-white px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-lg shadow-green-900/20 transition-all">
                                     <span>💬 HELP</span>
                                 </a>
                             </div>
@@ -327,14 +324,14 @@
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
                         <main className="lg:col-span-8 animate-slide-up">
-                            <section className="glass-panel p-8 md:p-10 rounded-[3rem] shadow-2xl min-h-[650px] flex flex-col relative overflow-hidden">
-                                <div className="flex justify-between items-center border-b border-slate-800 pb-6 mb-8">
-                                    <h2 className="text-2xl font-black text-white uppercase tracking-tight">${activeTab} Manager</h2>
+                            <section className="glass-panel p-8 md:p-10 rounded-[3rem] shadow-2xl min-h-[700px] flex flex-col relative">
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-8 mb-8">
+                                    <h2 className="text-3xl font-black text-white uppercase tracking-tighter">${activeTab} Manager</h2>
                                     ${activeTab !== 'security' && html`
                                         <button 
                                             onClick=${togglePublicStatus}
-                                            className=${`px-4 py-2 rounded-full text-[9px] font-black tracking-widest transition-all border-2 ${
-                                                getPublicStatus() ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-500'
+                                            className=${`px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all border-2 ${
+                                                getPublicStatus() ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-slate-800/40 border-slate-700 text-slate-500'
                                             }`}
                                         >
                                             ${getPublicStatus() ? '● PUBLIC STATUS' : '○ HIDDEN STATUS'}
@@ -344,46 +341,67 @@
 
                                 ${activeTab === 'security' ? html`
                                     ${!isSecurityUnlocked ? html`
-                                        <div className="flex-1 flex flex-col items-center justify-center space-y-6">
-                                            <div className="text-5xl">🔐</div>
-                                            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Master PIN Required</h3>
+                                        <div className="flex-1 flex flex-col items-center justify-center space-y-8">
+                                            <div className="text-6xl animate-pulse">🔐</div>
+                                            <div className="text-center">
+                                                <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-2">Restricted Area</h3>
+                                                <p className="text-[10px] text-slate-600 uppercase font-bold tracking-[0.2em]">Master Access Pin Required</p>
+                                            </div>
                                             <form onSubmit=${unlockSecurity} className="w-full max-w-xs space-y-4">
-                                                <input type="password" autoFocus value=${securityPinInput} onChange=${e => setSecurityPinInput(e.target.value)} className="w-full bg-black/60 border border-slate-800 p-4 rounded-2xl text-center font-mono tracking-widest text-lg outline-none focus:border-orange-500 text-white" placeholder="MASTER PIN"/>
-                                                <button type="submit" className="w-full bg-white text-black font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest hover:bg-slate-200">Unlock System</button>
+                                                <input type="password" autoFocus value=${securityPinInput} onChange=${e => setSecurityPinInput(e.target.value)} className="w-full bg-black/60 border border-slate-800 p-5 rounded-3xl text-center font-mono tracking-widest text-lg outline-none focus:border-orange-500 text-white transition-all" placeholder="MASTER PIN"/>
+                                                <button type="submit" className="w-full bg-white text-black font-black py-4 rounded-3xl text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all shadow-xl">Unlock System</button>
                                             </form>
                                         </div>
                                     ` : html`
                                         <div className="space-y-12 animate-slide-up">
                                             <div className="space-y-6">
                                                 <h3 className="text-xs font-black text-orange-500 uppercase tracking-widest pl-1">GitHub Configuration</h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div className="md:col-span-2"><label className="text-[8px] font-black uppercase text-slate-600 block pl-1">Access Token</label><input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-xl text-xs text-white"/></div>
-                                                    <div><label className="text-[8px] font-black uppercase text-slate-600 block pl-1">Owner</label><input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-xl text-xs text-white"/></div>
-                                                    <div><label className="text-[8px] font-black uppercase text-slate-600 block pl-1">Repo</label><input value=${config.repo} onChange=${e => setConfig({...config, repo: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-xl text-xs text-white"/></div>
+                                                <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                                                    <div className="md:col-span-12">
+                                                        <label className="text-[9px] font-black uppercase text-slate-600 block pl-1 mb-2 tracking-widest">Access Token</label>
+                                                        <input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full bg-black border border-slate-800 p-5 rounded-2xl text-xs text-white outline-none focus:border-orange-500 transition-all"/>
+                                                    </div>
+                                                    <div className="md:col-span-12">
+                                                        <label className="text-[9px] font-black uppercase text-slate-600 block pl-1 mb-2 tracking-widest">Owner</label>
+                                                        <input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full bg-black border border-slate-800 p-5 rounded-2xl text-xs text-white outline-none focus:border-orange-500 transition-all"/>
+                                                    </div>
+                                                    <div className="md:col-span-4">
+                                                        <label className="text-[9px] font-black uppercase text-slate-600 block pl-1 mb-2 tracking-widest">Repo</label>
+                                                        <input value=${config.repo} onChange=${e => setConfig({...config, repo: e.target.value})} className="w-full bg-black border border-slate-800 p-5 rounded-2xl text-xs text-white outline-none focus:border-orange-500 transition-all"/>
+                                                    </div>
+                                                    <div className="md:col-span-8 flex items-end">
+                                                        <div className="w-full h-[58px] bg-green-900/10 border-2 border-green-500/40 rounded-2xl flex items-center justify-center px-4">
+                                                            <span className="text-[11px] font-black text-green-500 uppercase tracking-[0.2em]">Welcome, ${currentUser.toUpperCase()}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
+
                                             <div className="space-y-6 pt-10 border-t border-slate-800">
-                                                <div className="flex justify-between items-center"><h3 className="text-xs font-black text-orange-500 uppercase tracking-widest">Keys Manager</h3><button onClick=${() => setLoginData({...loginData, keys: [{id: crypto.randomUUID(), key: 'RR-'+Math.random().toString(36).substring(2,8).toUpperCase(), owner: 'New Admin', isActive: true, expiresAt: ''}, ...loginData.keys]})} className="bg-orange-600 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest">+ New Key</button></div>
-                                                <div className="space-y-3">
+                                                <div className="flex justify-between items-center">
+                                                    <h3 className="text-xs font-black text-orange-500 uppercase tracking-widest pl-1">Keys Manager</h3>
+                                                    <button onClick=${() => setLoginData({...loginData, keys: [{id: crypto.randomUUID(), key: 'RR-'+Math.random().toString(36).substring(2,8).toUpperCase(), owner: 'New Admin', isActive: true, expiresAt: ''}, ...loginData.keys]})} className="bg-orange-600 hover:bg-orange-500 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg">+ New Key</button>
+                                                </div>
+                                                <div className="space-y-4">
                                                     ${loginData.keys.map((k, idx) => html`
-                                                        <div key=${k.id} className="bg-black/40 p-5 rounded-2xl border border-slate-800 flex flex-col gap-4">
-                                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                        <div key=${k.id} className="bg-black/30 p-6 rounded-[2rem] border border-slate-800/60 flex flex-col gap-5 animate-slide-up">
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                                                 <div>
-                                                                    <label className="text-[7px] font-black uppercase text-slate-600 block mb-1">Owner</label>
-                                                                    <input value=${k.owner} onChange=${e => { const up = [...loginData.keys]; up[idx].owner = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-xs font-bold text-white outline-none focus:border-orange-500 w-full" placeholder="Name"/>
+                                                                    <label className="text-[8px] font-black uppercase text-slate-600 block mb-2 tracking-widest">Owner</label>
+                                                                    <input value=${k.owner} onChange=${e => { const up = [...loginData.keys]; up[idx].owner = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-sm font-bold text-white outline-none focus:border-orange-500 w-full p-1" placeholder="Admin Name"/>
                                                                 </div>
                                                                 <div>
-                                                                    <label className="text-[7px] font-black uppercase text-slate-600 block mb-1">Key Code</label>
-                                                                    <input value=${k.key} onChange=${e => { const up = [...loginData.keys]; up[idx].key = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-xs font-mono text-orange-400 outline-none focus:border-orange-500 w-full" placeholder="RR-XXXX"/>
+                                                                    <label className="text-[8px] font-black uppercase text-slate-600 block mb-2 tracking-widest">Key Code</label>
+                                                                    <input value=${k.key} onChange=${e => { const up = [...loginData.keys]; up[idx].key = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-sm font-mono text-orange-400 outline-none focus:border-orange-500 w-full p-1" placeholder="RR-XXXXXX"/>
                                                                 </div>
-                                                                <div>
-                                                                    <label className="text-[7px] font-black uppercase text-slate-600 block mb-1">Expiry Date</label>
-                                                                    <input type="date" value=${k.expiresAt || ''} onChange=${e => { const up = [...loginData.keys]; up[idx].expiresAt = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-xs text-slate-300 outline-none focus:border-orange-500 w-full"/>
+                                                                <div className="md:col-span-2">
+                                                                    <label className="text-[8px] font-black uppercase text-slate-600 block mb-2 tracking-widest">Expiry Date</label>
+                                                                    <input type="date" value=${k.expiresAt || ''} onChange=${e => { const up = [...loginData.keys]; up[idx].expiresAt = e.target.value; setLoginData({...loginData, keys: up}); }} className="bg-transparent border-b border-slate-800 text-xs text-slate-300 outline-none focus:border-orange-500 w-full p-1"/>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex justify-end gap-2 items-center">
-                                                                <button onClick=${() => { const up = [...loginData.keys]; up[idx].isActive = !up[idx].isActive; setLoginData({...loginData, keys: up}); }} className=${`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase ${k.isActive ? 'bg-green-600/10 text-green-400' : 'bg-red-600/10 text-red-400'}`}>${k.isActive ? 'Active' : 'Locked'}</button>
-                                                                <button onClick=${() => setLoginData({...loginData, keys: loginData.keys.filter((_, i) => i !== idx)})} className="text-red-500 p-1">✕</button>
+                                                            <div className="flex justify-end gap-3 items-center">
+                                                                <button onClick=${() => { const up = [...loginData.keys]; up[idx].isActive = !up[idx].isActive; setLoginData({...loginData, keys: up}); }} className=${`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${k.isActive ? 'bg-green-600/10 text-green-500 border border-green-500/20' : 'bg-red-600/10 text-red-500 border border-red-500/20'}`}>${k.isActive ? 'ACTIVE' : 'INACTIVE'}</button>
+                                                                <button onClick=${() => setLoginData({...loginData, keys: loginData.keys.filter((_, i) => i !== idx)})} className="text-red-500/60 hover:text-red-500 p-2 transition-all">✕</button>
                                                             </div>
                                                         </div>
                                                     `)}
@@ -392,40 +410,58 @@
                                         </div>
                                     `}
                                 ` : activeTab === 'notice' ? html`
-                                    <div className="space-y-8 animate-slide-up flex-1">
-                                        <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Primary Headline</label><input value=${noticeData.title} onChange=${e => setNoticeData({...noticeData, title: e.target.value})} className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-xl font-bold text-white outline-none focus:border-orange-500"/></div>
-                                        <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Body Content</label><textarea rows="8" value=${noticeData.message.join('\n')} onChange=${e => setNoticeData({...noticeData, message: e.target.value.split('\n')})} className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-sm text-slate-300 outline-none focus:border-orange-500 resize-none custom-scrollbar"/></div>
-                                        <div className="pt-8 border-t border-slate-800/50 space-y-8">
-                                            <div><label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest pl-1">Version Tag</label><input value=${noticeData.updates?.version || ''} onChange=${e => setNoticeData({...noticeData, updates: {...(noticeData.updates || {}), version: e.target.value}})} className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-orange-500 font-black outline-none" placeholder="e.g. New App Updates v2.1"/></div>
+                                    <div className="space-y-10 animate-slide-up flex-1">
+                                        <div>
+                                            <label className="text-[11px] font-black text-slate-500 uppercase block mb-3 tracking-widest pl-1">Primary Headline</label>
+                                            <input value=${noticeData.title} onChange=${e => setNoticeData({...noticeData, title: e.target.value})} className="w-full bg-[#0d1117] border border-slate-800 p-6 rounded-[2rem] text-xl font-bold text-white outline-none focus:border-orange-500 transition-all" placeholder="Headline..."/>
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] font-black text-slate-500 uppercase block mb-3 tracking-widest pl-1">Body Content (Full Text)</label>
+                                            <textarea rows="10" value=${noticeData.message.join('\n')} onChange=${e => setNoticeData({...noticeData, message: e.target.value.split('\n')})} className="w-full bg-[#0d1117] border border-slate-800 p-6 rounded-[2rem] text-sm text-slate-300 outline-none focus:border-orange-500 resize-none custom-scrollbar transition-all leading-relaxed" placeholder="Body text..."/>
+                                        </div>
+
+                                        <div className="pt-10 border-t border-slate-800/60 space-y-10">
                                             <div>
-                                                <div className="flex justify-between items-center mb-4 pl-1"><label className="text-[9px] font-black text-slate-600 uppercase block tracking-widest">Changelog Items</label><button onClick=${addChangelogLine} className="text-[8px] font-black uppercase text-orange-500 bg-orange-500/10 px-3 py-1.5 rounded-lg hover:bg-orange-500/20">+ Add New Line</button></div>
-                                                <div className="space-y-3">${(noticeData.updates?.items || []).map((item, idx) => html`<div key=${idx} className="flex gap-3 animate-slide-up group"><div className="flex-1 relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500/40 text-[10px] font-black">•</span><input value=${item} onChange=${e => updateChangelogLine(idx, e.target.value)} className="w-full bg-black/30 border border-slate-800/50 pl-8 pr-4 py-3 rounded-xl text-xs text-slate-400 focus:text-slate-200 outline-none"/></div><button onClick=${() => removeChangelogLine(idx)} className="w-10 h-10 bg-red-900/10 text-red-500 rounded-xl flex items-center justify-center opacity-40 group-hover:opacity-100 transition-opacity">✕</button></div>`)}</div>
+                                                <label className="text-[10px] font-black text-slate-600 uppercase mb-3 block tracking-widest pl-1">Version Tag</label>
+                                                <input value=${noticeData.updates?.version || ''} onChange=${e => setNoticeData({...noticeData, updates: {...(noticeData.updates || {}), version: e.target.value}})} className="w-full bg-black/40 border border-slate-800 p-5 rounded-2xl text-sm text-orange-500 font-black outline-none focus:border-orange-500/40" placeholder="e.g. New App Updates v2.1"/>
+                                            </div>
+                                            <div>
+                                                <div className="flex justify-between items-center mb-5 pl-1">
+                                                    <label className="text-[10px] font-black text-slate-600 uppercase block tracking-widest">Changelog Items</label>
+                                                    <button onClick=${addChangelogLine} className="text-[9px] font-black uppercase text-orange-500 bg-orange-500/10 px-4 py-2 rounded-xl hover:bg-orange-500/20 transition-all">+ Add New Line</button>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    ${(noticeData.updates?.items || []).length === 0 ? html`
+                                                        <div className="p-8 border-2 border-dashed border-slate-800/50 rounded-3xl text-center">
+                                                            <span className="text-[10px] font-black text-slate-700 uppercase tracking-[0.2em]">No Changelog Items Added</span>
+                                                        </div>
+                                                    ` : (noticeData.updates?.items || []).map((item, idx) => html`
+                                                        <div key=${idx} className="flex gap-4 animate-slide-up group">
+                                                            <div className="flex-1 relative">
+                                                                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-orange-500/40 text-[12px] font-black">•</span>
+                                                                <input value=${item} onChange=${e => updateChangelogLine(idx, e.target.value)} className="w-full bg-black/30 border border-slate-800/50 pl-10 pr-5 py-4 rounded-2xl text-xs text-slate-400 focus:text-white outline-none focus:border-orange-500/30 transition-all"/>
+                                                            </div>
+                                                            <button onClick=${() => removeChangelogLine(idx)} className="w-12 h-12 bg-red-900/10 text-red-500 rounded-2xl flex items-center justify-center opacity-40 hover:opacity-100 transition-all">✕</button>
+                                                        </div>
+                                                    `)}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 ` : activeTab === 'events' ? html`
                                     <div className="space-y-10 animate-slide-up flex-1">
-                                        <button onClick=${addEvent} className="w-full py-4 border-2 border-dashed border-slate-800 rounded-3xl text-slate-600 hover:text-orange-500 hover:border-orange-500 transition-all font-black uppercase tracking-widest text-[10px]">+ Add New Event Card</button>
+                                        <button onClick=${() => setEventsData({...eventsData, events: [{title: 'New Event', content: ['Detail Point'], theme: {gradient: ["#ff9800", "#ff5722"], glow: "rgba(255,152,0,0.5)"}}, ...eventsData.events]})} className="w-full py-5 border-2 border-dashed border-slate-800 rounded-[2rem] text-slate-600 hover:text-orange-500 hover:border-orange-500 transition-all font-black uppercase tracking-widest text-[11px]">+ Add New Event Card</button>
                                         <div className="space-y-10">
                                             ${eventsData.events.map((ev, i) => html`
-                                                <div key=${i} className="bg-black/40 p-6 rounded-[2rem] border border-slate-800 relative group/card">
-                                                    <button onClick=${() => setEventsData({...eventsData, events: eventsData.events.filter((_, idx) => idx !== i)})} className="absolute top-4 right-4 text-red-500 opacity-0 group-hover/card:opacity-100 transition-opacity">✕</button>
-                                                    <div className="grid grid-cols-1 gap-6">
-                                                        <div><label className="text-[8px] font-black uppercase text-slate-600 block pl-1 mb-1">Headline</label><input value=${ev.title} onChange=${e => { const up = [...eventsData.events]; up[i].title = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-xl text-lg font-bold text-white outline-none focus:border-orange-500"/></div>
-                                                        <div><label className="text-[8px] font-black uppercase text-slate-600 block pl-1 mb-1">Description (Bullets)</label><textarea value=${ev.content.join('\n')} onChange=${e => { const up = [...eventsData.events]; up[i].content = e.target.value.split('\n'); setEventsData({...eventsData, events: up}); }} rows="4" className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-xl text-xs text-slate-400 outline-none focus:border-orange-500 resize-none"/></div>
-                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                            <div>
-                                                                <label className="text-[7px] font-black uppercase text-slate-600 block pl-1 mb-1">Color 1</label>
-                                                                <input type="color" value=${ev.theme?.gradient[0]} onChange=${e => { const up = [...eventsData.events]; up[i].theme.gradient[0] = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full h-10 bg-transparent cursor-pointer rounded-lg border-none"/>
-                                                            </div>
-                                                            <div>
-                                                                <label className="text-[7px] font-black uppercase text-slate-600 block pl-1 mb-1">Color 2</label>
-                                                                <input type="color" value=${ev.theme?.gradient[1]} onChange=${e => { const up = [...eventsData.events]; up[i].theme.gradient[1] = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full h-10 bg-transparent cursor-pointer rounded-lg border-none"/>
-                                                            </div>
-                                                            <div>
-                                                                <label className="text-[7px] font-black uppercase text-slate-600 block pl-1 mb-1">Glow Effect</label>
-                                                                <input value=${ev.theme?.glow} onChange=${e => { const up = [...eventsData.events]; up[i].theme.glow = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full bg-black/60 border border-slate-800 p-2 rounded-xl text-[9px] text-white outline-none" placeholder="rgba(255,152,0,0.5)"/>
-                                                            </div>
+                                                <div key=${i} className="bg-black/30 p-8 rounded-[3rem] border border-slate-800 relative group/card">
+                                                    <button onClick=${() => setEventsData({...eventsData, events: eventsData.events.filter((_, idx) => idx !== i)})} className="absolute top-6 right-6 text-red-500/50 hover:text-red-500 transition-all">✕</button>
+                                                    <div className="grid grid-cols-1 gap-8">
+                                                        <div><label className="text-[10px] font-black text-slate-600 uppercase mb-3 block tracking-widest">Event Headline</label><input value=${ev.title} onChange=${e => { const up = [...eventsData.events]; up[i].title = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-2xl text-xl font-black text-white outline-none focus:border-orange-500 transition-all"/></div>
+                                                        <div><label className="text-[10px] font-black text-slate-600 uppercase mb-3 block tracking-widest">Details (One per line)</label><textarea value=${ev.content.join('\n')} onChange=${e => { const up = [...eventsData.events]; up[i].content = e.target.value.split('\n'); setEventsData({...eventsData, events: up}); }} rows="6" className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-2xl text-sm text-slate-400 outline-none focus:border-orange-500 resize-none transition-all"/></div>
+                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                            <div><label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest">Gradient 1</label><input type="color" value=${ev.theme?.gradient[0]} onChange=${e => { const up = [...eventsData.events]; up[i].theme.gradient[0] = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full h-12 bg-transparent cursor-pointer rounded-xl border-none"/></div>
+                                                            <div><label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest">Gradient 2</label><input type="color" value=${ev.theme?.gradient[1]} onChange=${e => { const up = [...eventsData.events]; up[i].theme.gradient[1] = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full h-12 bg-transparent cursor-pointer rounded-xl border-none"/></div>
+                                                            <div><label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest">Glow Effect</label><input value=${ev.theme?.glow} onChange=${e => { const up = [...eventsData.events]; up[i].theme.glow = e.target.value; setEventsData({...eventsData, events: up}); }} className="w-full bg-black/60 border border-slate-800 p-3 rounded-xl text-[10px] text-white outline-none" placeholder="rgba(255,152,0,0.5)"/></div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -433,60 +469,62 @@
                                         </div>
                                     </div>
                                 ` : html`
-                                    <div className="space-y-8 animate-slide-up flex-1">
-                                        <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Headline</label><input value=${announcementData.title} onChange=${e => setAnnouncementData({...announcementData, title: e.target.value})} className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-xl font-bold text-white outline-none focus:border-orange-500"/></div>
-                                        <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest pl-1">Message</label><textarea rows="10" value=${announcementData.message} onChange=${e => setAnnouncementData({...announcementData, message: e.target.value})} className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-sm text-slate-300 outline-none focus:border-orange-500 resize-none leading-relaxed"/></div>
+                                    <div className="space-y-10 animate-slide-up flex-1">
+                                        <div><label className="text-[11px] font-black text-slate-500 uppercase block mb-3 tracking-widest pl-1">Headline</label><input value=${announcementData.title} onChange=${e => setAnnouncementData({...announcementData, title: e.target.value})} className="w-full bg-[#0d1117] border border-slate-800 p-6 rounded-[2rem] text-xl font-bold text-white outline-none focus:border-orange-500 transition-all"/></div>
+                                        <div><label className="text-[11px] font-black text-slate-500 uppercase block mb-3 tracking-widest pl-1">Message Body</label><textarea rows="12" value=${announcementData.message} onChange=${e => setAnnouncementData({...announcementData, message: e.target.value})} className="w-full bg-[#0d1117] border border-slate-800 p-6 rounded-[2rem] text-sm text-slate-300 outline-none focus:border-orange-500 resize-none leading-relaxed transition-all"/></div>
                                     </div>
                                 `}
 
-                                <button onClick=${handlePublish} disabled=${loading} className="w-full mt-auto py-6 bg-gradient-to-r from-orange-600 to-amber-500 text-white font-black text-xl rounded-3xl shadow-2xl uppercase tracking-[0.2em] transition-all hover:scale-[1.01] active:scale-[0.98] disabled:opacity-30">
+                                <button onClick=${handlePublish} disabled=${loading} className="w-full mt-10 py-8 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black text-2xl rounded-[2.5rem] shadow-2xl shadow-orange-900/20 uppercase tracking-[0.2em] transition-all hover:scale-[1.01] active:scale-[0.98] disabled:opacity-30">
                                     ${loading ? html`<div className="loader mx-auto"></div>` : '🚀 Apply Live Changes'}
                                 </button>
                             </section>
                         </main>
 
+                        <!-- Preview Sidebar -->
                         <aside className="lg:col-span-4 space-y-8">
                             <section className="glass-panel p-8 rounded-[3rem] sticky top-8 flex flex-col h-[calc(100vh-6rem)] overflow-hidden">
-                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-8 flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Mobile View Preview</h3>
-                                <div className="flex-1 bg-[#080a0e] rounded-[2.5rem] p-5 overflow-y-auto custom-scrollbar shadow-inner flex flex-col gap-8">
+                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-10 flex items-center gap-3"><span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span> Dynamic Preview (Full View)</h3>
+                                <div className="flex-1 bg-[#080a0e] rounded-[2.5rem] p-6 overflow-y-auto custom-scrollbar shadow-inner flex flex-col gap-10">
                                     ${activeTab === 'notice' ? html`
-                                        <div className="w-full bg-[#161a22] p-6 rounded-[2.5rem] border border-slate-800 relative overflow-hidden animate-slide-up shadow-2xl">
-                                            <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
-                                            <h4 className="text-orange-500 font-black text-xl uppercase tracking-tight mb-4">${noticeData.title || 'Notice Board'}</h4>
-                                            <div className="space-y-3 leading-relaxed">${noticeData.message.map((l, i) => html`<p key=${i} className="text-slate-400 text-xs font-medium">${l}</p>`)}</div>
+                                        <div className="w-full bg-[#161a22] p-8 rounded-[2.5rem] border border-slate-800 relative overflow-hidden animate-slide-up shadow-2xl">
+                                            <div className="absolute top-0 left-0 w-full h-1.5 bg-orange-600"></div>
+                                            <h4 className="text-orange-500 font-black text-xl uppercase tracking-tight mb-5">${noticeData.title || 'NOTICE TITLE'}</h4>
+                                            <div className="space-y-4 leading-relaxed">${noticeData.message.map((l, i) => html`<p key=${i} className="text-slate-400 text-xs font-medium">${l}</p>`)}</div>
                                             ${noticeData.updates?.version && html`
-                                                <div className="mt-8 pt-4 border-t border-slate-800/80 flex flex-col gap-2">
-                                                    <span className="text-orange-500 text-[9px] font-black uppercase">${noticeData.updates.version}</span>
-                                                    <div className="flex flex-col gap-1">${(noticeData.updates.items || []).map((it, ii) => html`<span key=${ii} className="text-slate-500 text-[8px] font-black uppercase">• ${it}</span>`)}</div>
+                                                <div className="mt-10 pt-6 border-t border-slate-800/80 flex flex-col gap-3">
+                                                    <span className="text-orange-500 text-[10px] font-black uppercase tracking-widest">${noticeData.updates.version}</span>
+                                                    <div className="flex flex-col gap-2">${(noticeData.updates.items || []).map((it, ii) => html`<span key=${ii} className="text-slate-500 text-[9px] font-bold uppercase tracking-wide">• ${it}</span>`)}</div>
                                                 </div>
                                             `}
                                         </div>
                                     ` : activeTab === 'announcement' ? html`
-                                        <div className="bg-[#1e2329] p-8 rounded-[2.5rem] border border-slate-700 text-center shadow-2xl shadow-orange-900/10 animate-slide-up">
-                                            <div className="text-4xl mb-6">📢</div>
-                                            <h4 className="text-white font-black text-xl uppercase mb-4">${announcementData.title || 'Announcement'}</h4>
-                                            <p className="text-slate-400 text-xs leading-relaxed mb-8">${announcementData.message || 'Announcement message content goes here...'}</p>
-                                            <div className="py-3 bg-orange-600 text-white text-[9px] font-black uppercase rounded-2xl tracking-widest shadow-xl cursor-default">Dismiss Preview</div>
+                                        <div className="bg-[#1e2329] p-10 rounded-[3rem] border border-slate-700 text-center shadow-2xl shadow-orange-900/10 animate-slide-up">
+                                            <div className="text-5xl mb-8">📢</div>
+                                            <h4 className="text-white font-black text-2xl uppercase mb-5">${announcementData.title || 'HELLO EVERYONE!! 😊'}</h4>
+                                            <p className="text-slate-400 text-sm leading-relaxed mb-10">${announcementData.message || 'Announcement message content goes here...'}</p>
+                                            <div className="py-4 bg-orange-600 text-white text-[10px] font-black uppercase rounded-2xl tracking-[0.3em] shadow-xl">DISMISS PREVIEW</div>
                                         </div>
-                                    ` : activeTab === 'events' ? eventsData.events.map((ev, i) => html`<div key=${i} className="p-8 rounded-[2.5rem] text-white shadow-2xl animate-slide-up" style=${{ background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(', ') || '#161a22, #0d1117'})`, boxShadow: `0 10px 40px ${ev.theme?.glow || 'transparent'}` }}><h4 className="text-xl font-black uppercase mb-4 leading-tight">${ev.title || 'Event'}</h4><div className="space-y-2">${ev.content.map((l, ii) => html`<p key=${ii} className="text-[11px] font-medium opacity-90 leading-relaxed">• ${l}</p>`)}</div></div>`) : html`<div className="h-full flex flex-col items-center justify-center opacity-10 italic font-black text-[10px] uppercase tracking-[0.5em] text-center">Preview Monitor Active</div>`}
+                                    ` : activeTab === 'events' ? eventsData.events.map((ev, i) => html`<div key=${i} className="p-10 rounded-[3rem] text-white shadow-2xl animate-slide-up mb-6" style=${{ background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(', ') || '#161a22, #0d1117'})`, boxShadow: `0 20px 60px ${ev.theme?.glow || 'transparent'}` }}><h4 className="text-2xl font-black uppercase mb-6 leading-tight">${ev.title || 'UPCOMING COLLEGE EVENTS'}</h4><div className="space-y-3">${ev.content.map((l, ii) => html`<p key=${ii} className="text-[12px] font-medium opacity-90 leading-relaxed tracking-tight">• ${l}</p>`)}</div></div>`) : html`<div className="h-full flex flex-col items-center justify-center opacity-10 text-[10px] uppercase tracking-[0.8em] font-black text-center px-10">Security Console Active<br/><br/>Preview Monitor Idle</div>`}
                                 </div>
                             </section>
                         </aside>
                     </div>
 
-                    <footer className="text-center pt-24 pb-12 flex flex-col items-center gap-6">
-                        <div className="flex items-center gap-6 w-full max-w-lg opacity-40">
-                            <div className="h-px flex-1 bg-slate-800"></div><span className="text-[7px] font-black uppercase tracking-[0.8em] text-slate-500">Official System</span><div className="h-px flex-1 bg-slate-800"></div>
+                    <!-- Footer -->
+                    <footer className="text-center pt-32 pb-16 flex flex-col items-center gap-8">
+                        <div className="flex items-center gap-8 w-full max-w-2xl opacity-40">
+                            <div className="h-px flex-1 bg-slate-800"></div><span className="text-[8px] font-black uppercase tracking-[0.8em] text-slate-500">OFFICIAL SYSTEM</span><div className="h-px flex-1 bg-slate-800"></div>
                         </div>
-                        <div className="flex flex-col items-center gap-4">
-                            <p className="text-slate-700 text-[9px] font-black uppercase tracking-[0.4em]">RR International College</p>
-                            <div className="flex items-center gap-3 bg-[#161b22] px-6 py-3 rounded-2xl border border-slate-800/50 shadow-xl whitespace-nowrap overflow-hidden">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Made By</span>
-                                <span className="h-4 w-px bg-slate-800"></span>
-                                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-orange-500">Pawan Ponnam</span>
+                        <div className="flex flex-col items-center gap-6">
+                            <p className="text-slate-700 text-[10px] font-black uppercase tracking-[0.6em]">RR International College</p>
+                            <div className="flex items-center gap-4 bg-[#161b22] px-8 py-4 rounded-3xl border border-slate-800/50 shadow-2xl transition-transform hover:scale-105">
+                                <span className="text-[12px] font-bold text-slate-500 uppercase tracking-[0.2em]">MADE BY</span>
+                                <span className="h-5 w-[2px] bg-slate-800"></span>
+                                <span className="text-[13px] font-black uppercase tracking-[0.3em] text-orange-500">PAWAN PONNAM</span>
                             </div>
                         </div>
-                        <p className="text-[7px] font-bold text-slate-800 uppercase tracking-[0.3em] opacity-40">Encrypted Environment v2.2</p>
+                        <p className="text-[8px] font-bold text-slate-800 uppercase tracking-[0.5em] opacity-40">ENCRYPTED ENVIRONMENT V2.2</p>
                     </footer>
                 </div>
             `;
