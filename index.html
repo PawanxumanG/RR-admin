@@ -260,6 +260,41 @@
                 setEventsData({ ...eventsData, events: newEvents });
             };
 
+            // Helpers for Notice Changelog
+            const addChangelogItem = () => {
+                const currentItems = noticeData.updates?.items || [];
+                setNoticeData({
+                    ...noticeData,
+                    updates: {
+                        ...noticeData.updates,
+                        items: [...currentItems, '']
+                    }
+                });
+            };
+
+            const updateChangelogItem = (index, value) => {
+                const currentItems = [...(noticeData.updates?.items || [])];
+                currentItems[index] = value;
+                setNoticeData({
+                    ...noticeData,
+                    updates: {
+                        ...noticeData.updates,
+                        items: currentItems
+                    }
+                });
+            };
+
+            const removeChangelogItem = (index) => {
+                const currentItems = (noticeData.updates?.items || []).filter((_, i) => i !== index);
+                setNoticeData({
+                    ...noticeData,
+                    updates: {
+                        ...noticeData.updates,
+                        items: currentItems
+                    }
+                });
+            };
+
             return html`
                 <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-6">
                     
@@ -428,25 +463,47 @@
                                                 ></textarea>
                                             </div>
                                             ${activeTab === 'notice' && html`
-                                                <div className="pt-8 border-t border-slate-800/50 grid grid-cols-2 gap-6">
+                                                <div className="pt-8 border-t border-slate-800/50 flex flex-col gap-8">
                                                     <div>
                                                         <label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest">Version Tag</label>
-                                                        <textarea 
+                                                        <input 
                                                             value=${noticeData.updates?.version || ''} 
                                                             onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, version: e.target.value}})} 
-                                                            rows="2"
-                                                            className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-orange-500 font-black outline-none resize-none"
-                                                        ></textarea>
+                                                            className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-orange-500 font-black outline-none shadow-inner focus:border-orange-500/50"
+                                                            placeholder="e.g. New App Updates v2.1"
+                                                        />
                                                     </div>
                                                     <div>
-                                                        <label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest">Changelog Items</label>
-                                                        <textarea 
-                                                            value=${noticeData.updates?.items?.join('\n') || ''} 
-                                                            onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, items: e.target.value.split('\n').map(i => i.trim())}})} 
-                                                            rows="4"
-                                                            className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-slate-400 outline-none resize-none custom-scrollbar"
-                                                            placeholder="Add updates here..."
-                                                        ></textarea>
+                                                        <div className="flex justify-between items-center mb-4">
+                                                            <label className="text-[9px] font-black text-slate-600 uppercase block tracking-widest">Changelog Items</label>
+                                                            <button onClick=${addChangelogItem} className="text-[8px] font-black uppercase text-orange-500 bg-orange-500/10 px-3 py-1.5 rounded-lg hover:bg-orange-500/20 transition-all">+ Add New Line</button>
+                                                        </div>
+                                                        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                                            ${(noticeData.updates?.items || []).map((item, idx) => html`
+                                                                <div key=${idx} className="flex gap-3 group/item animate-slide-up">
+                                                                    <div className="flex-1 relative">
+                                                                        <span className="absolute left-4 top-4 text-orange-500/40 text-[10px] font-black">•</span>
+                                                                        <input 
+                                                                            value=${item} 
+                                                                            onChange=${e => updateChangelogItem(idx, e.target.value)}
+                                                                            className="w-full bg-black/30 border border-slate-800/50 pl-8 pr-4 py-3 rounded-xl text-xs text-slate-400 focus:text-slate-200 outline-none focus:border-orange-500/30 focus:bg-black/50 transition-all"
+                                                                            placeholder="Enter update detail..."
+                                                                        />
+                                                                    </div>
+                                                                    <button 
+                                                                        onClick=${() => removeChangelogItem(idx)}
+                                                                        className="w-10 h-10 bg-red-900/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl flex items-center justify-center transition-all opacity-40 group-hover/item:opacity-100"
+                                                                    >
+                                                                        <span className="text-xs">✕</span>
+                                                                    </button>
+                                                                </div>
+                                                            `)}
+                                                            ${(noticeData.updates?.items || []).length === 0 && html`
+                                                                <div className="text-center py-8 bg-black/20 rounded-2xl border border-dashed border-slate-800/50">
+                                                                    <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">No changelog items added</p>
+                                                                </div>
+                                                            `}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             `}
@@ -498,7 +555,7 @@
                                                 <div className="mt-8 pt-4 border-t border-slate-800/80 flex flex-col gap-2 text-[8px] font-black uppercase text-slate-600">
                                                     <span className="text-orange-500 break-words">${noticeData.updates.version}</span>
                                                     <div className="flex flex-col gap-1">
-                                                        ${noticeData.updates.items.map((item, ii) => html`<span key=${ii} className="text-slate-500 break-words">• ${item}</span>`)}
+                                                        ${(noticeData.updates.items || []).map((item, ii) => html`<span key=${ii} className="text-slate-500 break-words">• ${item}</span>`)}
                                                     </div>
                                                 </div>
                                             `}
