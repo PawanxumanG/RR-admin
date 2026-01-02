@@ -49,11 +49,14 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        .tab-slider {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
-        .glow-orange {
-            box-shadow: 0 0 20px rgba(249, 115, 22, 0.15);
+        .event-preview-card {
+            background-size: 400% 400%;
+            animation: gradientFlow 8s ease infinite;
         }
     </style>
     <script type="importmap">
@@ -91,21 +94,12 @@
                 return saved ? JSON.parse(saved) : { token: '', owner: '', repo: '' };
             });
 
-            const [noticeData, setNoticeData] = useState({
-                show: true,
-                title: '',
-                message: [],
-                updates: { version: '', items: [] }
-            });
+            // State for different files
+            const [noticeData, setNoticeData] = useState({ show: true, title: '', message: [], updates: { version: '', items: [] } });
+            const [announcementData, setAnnouncementData] = useState({ id: 'notice-default', show: false, title: '', message: '' });
+            const [eventsData, setEventsData] = useState({ show: true, events: [] });
 
-            const [announcementData, setAnnouncementData] = useState({
-                id: 'notice-default',
-                show: false,
-                title: '',
-                message: ''
-            });
-
-            const [shas, setShas] = useState({ notice: null, announcement: null });
+            const [shas, setShas] = useState({ notice: null, announcement: null, events: null });
             const [loading, setLoading] = useState(false);
             const [status, setStatus] = useState(null);
             const [showSettings, setShowSettings] = useState(false);
@@ -124,9 +118,9 @@
                 if (passwordInput === ADMIN_PASSWORD) {
                     setIsUnlocked(true);
                     setPasswordInput('');
-                    notify('success', 'Admin settings unlocked.');
+                    notify('success', 'Admin session unlocked.');
                 } else {
-                    notify('error', 'Access Denied: Invalid credentials.');
+                    notify('error', 'Authentication failed.');
                 }
             };
 
@@ -139,18 +133,27 @@
             const toggleSettings = () => {
                 if (showSettings) {
                     handleLock();
-                    notify('success', 'Configuration session secured.');
+                    notify('success', 'Security protocols active.');
                 } else {
                     setShowSettings(true);
                 }
             };
 
-            const getCurrentFilePath = () => activeTab === 'notice' ? 'notice.json' : 'announcement.json';
-            const getDisplayName = () => activeTab === 'notice' ? 'Notice Board' : 'Announcement Pop-up';
+            const getCurrentFilePath = () => {
+                if(activeTab === 'notice') return 'notice.json';
+                if(activeTab === 'announcement') return 'announcement.json';
+                return 'events.json';
+            };
+
+            const getDisplayName = () => {
+                if(activeTab === 'notice') return 'Notice Board';
+                if(activeTab === 'announcement') return 'Announcement Pop-up';
+                return 'Events Manager';
+            };
 
             const handleSync = async () => {
                 if (!config.token || !config.owner || !config.repo) {
-                    notify('error', 'System Error: GitHub connection not configured.');
+                    notify('error', 'Configuration missing. Contact admin.');
                     return;
                 }
                 setLoading(true);
@@ -160,16 +163,19 @@
                     const res = await fetch(url, {
                         headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' }
                     });
-                    if (!res.ok) throw new Error(`Fetch failed for ${path}. Ensure file exists.`);
+                    if (!res.ok) throw new Error(`Fetch failed for ${path}.`);
                     const data = await res.json();
                     const content = JSON.parse(safeB64Decode(data.content));
                     
                     if (activeTab === 'notice') {
                         setNoticeData(content);
                         setShas(prev => ({ ...prev, notice: data.sha }));
-                    } else {
+                    } else if (activeTab === 'announcement') {
                         setAnnouncementData(content);
                         setShas(prev => ({ ...prev, announcement: data.sha }));
+                    } else {
+                        setEventsData(content);
+                        setShas(prev => ({ ...prev, events: data.sha }));
                     }
                     notify('success', `${getDisplayName()} data synchronized.`);
                 } catch (err) {
@@ -180,14 +186,17 @@
             };
 
             const handlePublish = async () => {
-                const currentSha = activeTab === 'notice' ? shas.notice : shas.announcement;
+                const currentSha = shas[activeTab];
                 if (!config.token || !currentSha) {
-                    notify('error', 'Action required: Sync before publishing updates.');
+                    notify('error', 'Sync with GitHub before publishing.');
                     return;
                 }
                 setLoading(true);
                 const path = getCurrentFilePath();
-                const currentData = activeTab === 'notice' ? noticeData : { ...announcementData, id: 'ann-' + Date.now() };
+                let currentData;
+                if (activeTab === 'notice') currentData = noticeData;
+                else if (activeTab === 'announcement') currentData = { ...announcementData, id: 'ann-' + Date.now() };
+                else currentData = eventsData;
 
                 try {
                     const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`;
@@ -205,11 +214,11 @@
                         },
                         body: JSON.stringify(body)
                     });
-                    if (!res.ok) throw new Error('Publication failed. Check repository permissions.');
+                    if (!res.ok) throw new Error('Publication failed.');
                     const resData = await res.json();
                     
                     setShas(prev => ({ ...prev, [activeTab]: resData.content.sha }));
-                    notify('success', `Live Update: ${getDisplayName()} is now current!`);
+                    notify('success', `${getDisplayName()} is now live!`);
                 } catch (err) {
                     notify('error', err.message);
                 } finally {
@@ -217,264 +226,280 @@
                 }
             };
 
-            const updateNoticeMessage = (val) => {
-                setNoticeData({ ...noticeData, message: val.split('\n') });
+            // Helpers for Events
+            const addEvent = () => {
+                const newEvent = {
+                    title: 'New College Event',
+                    content: ['Enter detail line 1', 'Enter detail line 2'],
+                    theme: {
+                        gradient: ["#ff9800", "#ff5722"],
+                        glow: "rgba(255,152,0,.5)"
+                    }
+                };
+                setEventsData({ ...eventsData, events: [newEvent, ...eventsData.events] });
+            };
+
+            const removeEvent = (index) => {
+                const newEvents = eventsData.events.filter((_, i) => i !== index);
+                setEventsData({ ...eventsData, events: newEvents });
+            };
+
+            const updateEvent = (index, field, value) => {
+                const newEvents = [...eventsData.events];
+                if (field === 'content') {
+                    newEvents[index].content = value.split('\n');
+                } else if (field === 'gradient1') {
+                    newEvents[index].theme.gradient[0] = value;
+                } else if (field === 'gradient2') {
+                    newEvents[index].theme.gradient[1] = value;
+                } else if (field === 'glow') {
+                    newEvents[index].theme.glow = value;
+                } else {
+                    newEvents[index][field] = value;
+                }
+                setEventsData({ ...eventsData, events: newEvents });
             };
 
             return html`
                 <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-6">
                     
-                    <!-- Top Navigation Bar -->
-                    <header className="flex flex-col md:flex-row justify-between items-center gap-6 bg-[#161b22] p-5 rounded-[2.5rem] border border-slate-800 shadow-2xl relative overflow-hidden">
-                        <div className="flex items-center gap-4 group">
-                            <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl text-white shadow-xl shadow-orange-900/40 group-hover:scale-105 transition-transform duration-300">RR</div>
+                    <!-- Header Navigation -->
+                    <header className="flex flex-col xl:flex-row justify-between items-center gap-6 bg-[#161b22] p-5 rounded-[2.5rem] border border-slate-800 shadow-2xl relative">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl shadow-orange-900/40">RR</div>
                             <div>
-                                <h1 className="text-xl font-black text-white tracking-tight">College Control Center</h1>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">Management Suite v2.1</p>
+                                <h1 className="text-lg font-black text-white tracking-tight">College Control Center</h1>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Management Suite v2.2</p>
                             </div>
                         </div>
 
-                        <!-- Segmented Control Tabs -->
-                        <div className="bg-black/40 p-1.5 rounded-2xl flex items-center gap-1 border border-slate-800/50">
-                            <button 
-                                onClick=${() => setActiveTab('notice')}
-                                className=${`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'notice' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/30' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}`}
-                            >
-                                Notice Board
-                            </button>
-                            <button 
-                                onClick=${() => setActiveTab('announcement')}
-                                className=${`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'announcement' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/30' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}`}
-                            >
-                                Popup Alert
-                            </button>
+                        <!-- Segmented Navigation -->
+                        <div className="bg-black/40 p-1 rounded-2xl flex flex-wrap justify-center items-center gap-1 border border-slate-800/50">
+                            ${['notice', 'announcement', 'events'].map(tab => html`
+                                <button 
+                                    key=${tab}
+                                    onClick=${() => setActiveTab(tab)}
+                                    className=${`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === tab ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    ${tab === 'notice' ? 'Notices' : tab === 'announcement' ? 'Popup' : 'Events'}
+                                </button>
+                            `)}
                         </div>
 
-                        <div className="flex gap-3 w-full md:w-auto">
-                            <button 
-                                onClick=${toggleSettings} 
-                                className=${`flex-1 md:flex-none px-6 py-3 rounded-2xl text-sm font-black border transition-all duration-300 ${showSettings ? 'bg-white border-white text-black' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
-                            >
-                                ${showSettings ? '✕ Close Config' : '⚙️ Settings'}
+                        <div className="flex gap-2">
+                            <button onClick=${toggleSettings} className=${`px-5 py-3 rounded-2xl text-xs font-black border transition-all ${showSettings ? 'bg-white text-black' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
+                                ${showSettings ? '✕ Close' : '⚙️ Config'}
                             </button>
-                            <button onClick=${handleSync} disabled=${loading} className="flex-1 md:flex-none px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-sm font-black text-white shadow-lg shadow-blue-900/30 disabled:opacity-50 flex items-center justify-center gap-2 group">
-                                ${loading ? html`<div className="loader"></div>` : html`<span className="group-hover:rotate-180 transition-transform duration-500">🔄</span> Sync Live`}
+                            <button onClick=${handleSync} disabled=${loading} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-xs font-black text-white shadow-lg shadow-blue-900/30 disabled:opacity-50 flex items-center gap-2">
+                                ${loading ? html`<div className="loader"></div>` : html`🔄 Sync Live`}
                             </button>
                         </div>
                     </header>
 
-                    <!-- Protected Settings Panel -->
+                    <!-- Settings Panel -->
                     ${showSettings && html`
-                        <section className="glass-panel p-8 rounded-[2.5rem] animate-slide-up bg-orange-500/5 border-orange-500/20 glow-orange">
+                        <section className="glass-panel p-8 rounded-[2.5rem] animate-slide-up bg-orange-500/5 border-orange-500/20 shadow-[0_0_40px_rgba(249,115,22,0.1)]">
                             ${!isUnlocked ? html`
-                                <div className="max-w-md mx-auto py-10 text-center">
-                                    <div className="mb-6 inline-flex items-center justify-center w-16 h-16 bg-orange-600/10 text-orange-500 rounded-3xl text-3xl shadow-inner shadow-orange-500/10">🔒</div>
-                                    <h3 className="text-lg font-black text-white uppercase tracking-widest mb-2">Restricted Area</h3>
-                                    <p className="text-xs text-slate-500 mb-8 font-semibold tracking-wide">AUTHENTICATION REQUIRED FOR SYSTEM CONFIGURATION</p>
-                                    <form onSubmit=${handleUnlock} className="flex flex-col gap-4">
-                                        <input 
-                                            type="password" 
-                                            autoFocus
-                                            value=${passwordInput} 
-                                            onChange=${e => setPasswordInput(e.target.value)}
-                                            className="w-full bg-black/60 border border-slate-800 p-5 rounded-2xl focus:border-orange-500 outline-none text-center font-mono tracking-widest text-xl transition-all shadow-inner" 
-                                            placeholder="••••••••"
-                                        />
-                                        <button type="submit" className="bg-orange-600 hover:bg-orange-500 text-white font-black py-4 rounded-2xl text-sm transition-all shadow-xl shadow-orange-900/20 active:scale-95 uppercase tracking-widest">Verify Access</button>
+                                <div className="max-w-md mx-auto py-6 text-center">
+                                    <div className="mb-4 text-3xl">🔒</div>
+                                    <h3 className="text-sm font-black text-white uppercase tracking-widest mb-2">Restricted Area</h3>
+                                    <form onSubmit=${handleUnlock} className="flex flex-col gap-3">
+                                        <input type="password" autoFocus value=${passwordInput} onChange=${e => setPasswordInput(e.target.value)} className="w-full bg-black/60 border border-slate-800 p-4 rounded-2xl focus:border-orange-500 outline-none text-center font-mono tracking-widest text-lg" placeholder="••••••••"/>
+                                        <button type="submit" className="bg-orange-600 hover:bg-orange-500 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest">Authorize Access</button>
                                     </form>
                                 </div>
                             ` : html`
-                                <div className="flex justify-between items-center mb-8">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-2 h-8 bg-orange-500 rounded-full"></div>
-                                        <h3 className="text-sm font-black text-white uppercase tracking-widest">GitHub Core Settings</h3>
-                                    </div>
-                                    <button onClick=${handleLock} className="text-[10px] font-black uppercase text-slate-400 hover:text-white px-4 py-2 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 transition-all">🔒 End Session</button>
-                                </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="group">
-                                        <label className="text-[10px] font-black text-slate-500 group-focus-within:text-orange-500 uppercase mb-2 block tracking-widest transition-colors">Access Token</label>
-                                        <input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl focus:border-orange-500 outline-none transition-all text-sm" placeholder="ghp_..."/>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block">Access Token</label>
+                                        <input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-2xl focus:border-orange-500 outline-none text-sm"/>
                                     </div>
-                                    <div className="group">
-                                        <label className="text-[10px] font-black text-slate-500 group-focus-within:text-orange-500 uppercase mb-2 block tracking-widest transition-colors">Repo Owner</label>
-                                        <input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl focus:border-orange-500 outline-none transition-all text-sm" placeholder="Username"/>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block">Repo Owner</label>
+                                        <input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-2xl focus:border-orange-500 outline-none text-sm"/>
                                     </div>
-                                    <div className="group">
-                                        <label className="text-[10px] font-black text-slate-500 group-focus-within:text-orange-500 uppercase mb-2 block tracking-widest transition-colors">Repo Name</label>
-                                        <input value=${config.repo} onChange=${e => setConfig({...config, repo: e.target.value})} className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl focus:border-orange-500 outline-none transition-all text-sm" placeholder="Repository"/>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block">Repo Name</label>
+                                        <input value=${config.repo} onChange=${e => setConfig({...config, repo: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-2xl focus:border-orange-500 outline-none text-sm"/>
                                     </div>
                                 </div>
                             `}
                         </section>
                     `}
 
-                    <!-- Notifications Container -->
+                    <!-- Notifications -->
                     ${status && html`
-                        <div className=${`fixed bottom-8 right-8 z-[100] p-5 rounded-3xl border shadow-2xl flex items-center gap-4 animate-slide-up backdrop-blur-xl ${
-                            status.type === 'success' ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-red-600/10 border-red-500 text-red-400'
-                        }`}>
-                            <span className="text-xl">${status.type === 'success' ? '✔' : '✘'}</span>
-                            <span className="font-bold text-sm tracking-wide uppercase">${status.message}</span>
+                        <div className=${`fixed bottom-8 right-8 z-[100] p-4 rounded-2xl border shadow-2xl flex items-center gap-3 animate-slide-up backdrop-blur-xl ${status.type === 'success' ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-red-600/10 border-red-500 text-red-400'}`}>
+                            <span className="font-bold text-xs tracking-wide uppercase">${status.message}</span>
                         </div>
                     `}
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                         
-                        <!-- Main Content Editor -->
+                        <!-- Main Editor Section -->
                         <div className="lg:col-span-8 space-y-8">
-                            <section className="glass-panel p-10 rounded-[3rem] shadow-2xl relative overflow-hidden group">
-                                <!-- Subtle Background Label -->
-                                <div className="absolute top-10 -right-10 opacity-[0.03] text-[10rem] font-black uppercase tracking-tighter pointer-events-none group-hover:opacity-[0.05] transition-opacity duration-700">
-                                    ${activeTab}
+                            <section className="glass-panel p-8 md:p-10 rounded-[3rem] shadow-2xl relative overflow-hidden group">
+                                <div className="flex justify-between items-center mb-8 pb-6 border-b border-slate-800/50">
+                                    <div>
+                                        <p className="text-[10px] font-black text-orange-500 uppercase tracking-[0.4em] mb-1">Editor Session</p>
+                                        <h2 className="text-2xl font-black text-white uppercase tracking-tight">${getDisplayName()}</h2>
+                                    </div>
+                                    <button 
+                                        onClick=${() => {
+                                            if(activeTab === 'notice') setNoticeData({...noticeData, show: !noticeData.show});
+                                            else if(activeTab === 'announcement') setAnnouncementData({...announcementData, show: !announcementData.show});
+                                            else setEventsData({...eventsData, show: !eventsData.show});
+                                        }}
+                                        className=${`px-5 py-2 rounded-full text-[9px] font-black transition-all border-2 ${
+                                            (activeTab === 'notice' ? noticeData.show : activeTab === 'announcement' ? announcementData.show : eventsData.show) ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-500'
+                                        }`}
+                                    >
+                                        ● PUBLIC STATUS
+                                    </button>
                                 </div>
 
-                                <div className="flex justify-between items-end mb-10 relative z-10 border-b border-slate-800/50 pb-6">
-                                    <div>
-                                        <p className="text-[10px] font-black text-orange-500 uppercase tracking-[0.4em] mb-1">Active Editor</p>
-                                        <h2 className="text-3xl font-black text-white uppercase tracking-tight">
-                                            ${getDisplayName()}
-                                        </h2>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-2">
-                                        <p className="text-[8px] font-black text-slate-600 uppercase tracking-[0.2em]">Visibility Status</p>
-                                        <button 
-                                            onClick=${() => activeTab === 'notice' ? setNoticeData({...noticeData, show: !noticeData.show}) : setAnnouncementData({...announcementData, show: !announcementData.show})}
-                                            className=${`px-6 py-2 rounded-full text-[10px] font-black transition-all duration-300 border-2 ${
-                                                (activeTab === 'notice' ? noticeData.show : announcementData.show) ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-500'
-                                            }`}
-                                        >
-                                            ${(activeTab === 'notice' ? noticeData.show : announcementData.show) ? '● PUBLIC' : '○ HIDDEN'}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-8 relative z-10">
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3 pl-1">Headline Text</label>
-                                        <input 
-                                            value=${activeTab === 'notice' ? noticeData.title : announcementData.title}
-                                            onChange=${e => activeTab === 'notice' ? setNoticeData({...noticeData, title: e.target.value}) : setAnnouncementData({...announcementData, title: e.target.value})}
-                                            className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-xl font-bold text-white focus:border-orange-500 outline-none transition-all shadow-inner focus:ring-4 focus:ring-orange-500/5"
-                                            placeholder="Enter compelling headline..."
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3 pl-1">Message Body Content</label>
-                                        <textarea 
-                                            value=${activeTab === 'notice' ? noticeData.message.join('\n') : announcementData.message}
-                                            onChange=${e => activeTab === 'notice' ? updateNoticeMessage(e.target.value) : setAnnouncementData({...announcementData, message: e.target.value})}
-                                            rows="10"
-                                            className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-slate-300 leading-relaxed focus:border-orange-500 outline-none transition-all resize-none custom-scrollbar text-base shadow-inner focus:ring-4 focus:ring-orange-500/5"
-                                            placeholder="Type detailed message here. Use line breaks for multiple points."
-                                        ></textarea>
-                                    </div>
-
-                                    ${activeTab === 'notice' && html`
-                                        <div className="pt-8 border-t border-slate-800/50">
-                                            <div className="flex items-center gap-3 mb-6">
-                                                <div className="w-1.5 h-6 bg-blue-500 rounded-full"></div>
-                                                <h4 className="text-xs font-black text-white uppercase tracking-widest">Application Version Control</h4>
+                                <div className="space-y-8">
+                                    ${activeTab === 'events' ? html`
+                                        <!-- Events Array Editor -->
+                                        <div className="space-y-10">
+                                            <button onClick=${addEvent} className="w-full py-4 border-2 border-dashed border-slate-800 rounded-3xl text-slate-500 hover:text-orange-500 hover:border-orange-500 transition-all font-black uppercase tracking-widest text-[10px]">
+                                                + Add New Event Card
+                                            </button>
+                                            <div className="space-y-12">
+                                                ${eventsData.events.map((ev, idx) => html`
+                                                    <div key=${idx} className="bg-black/40 p-6 rounded-[2rem] border border-slate-800/50 relative group/event">
+                                                        <button onClick=${() => removeEvent(idx)} className="absolute -top-3 -right-3 w-8 h-8 bg-red-600 rounded-full flex items-center justify-center text-white text-xs opacity-0 group-hover/event:opacity-100 transition-opacity shadow-lg">✕</button>
+                                                        <div className="grid grid-cols-1 gap-6">
+                                                            <div>
+                                                                <label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest pl-1">Event Headline</label>
+                                                                <input value=${ev.title} onChange=${e => updateEvent(idx, 'title', e.target.value)} className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-2xl text-lg font-bold text-white outline-none focus:border-orange-500"/>
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest pl-1">Description (Line by Line)</label>
+                                                                <textarea value=${ev.content.join('\n')} onChange=${e => updateEvent(idx, 'content', e.target.value)} rows="4" className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-2xl text-sm text-slate-400 outline-none focus:border-orange-500 resize-none custom-scrollbar" placeholder="One point per line..."></textarea>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                                                                <div>
+                                                                    <label className="text-[8px] font-black text-slate-600 uppercase mb-2 block pl-1 tracking-tighter">Color 1</label>
+                                                                    <input type="color" value=${ev.theme?.gradient[0]} onChange=${e => updateEvent(idx, 'gradient1', e.target.value)} className="w-full h-10 bg-transparent cursor-pointer rounded-lg border-none"/>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-[8px] font-black text-slate-600 uppercase mb-2 block pl-1 tracking-tighter">Color 2</label>
+                                                                    <input type="color" value=${ev.theme?.gradient[1]} onChange=${e => updateEvent(idx, 'gradient2', e.target.value)} className="w-full h-10 bg-transparent cursor-pointer rounded-lg border-none"/>
+                                                                </div>
+                                                                <div className="col-span-2">
+                                                                    <label className="text-[8px] font-black text-slate-600 uppercase mb-2 block pl-1 tracking-tighter">Glow Effect (RGBA)</label>
+                                                                    <input value=${ev.theme?.glow} onChange=${e => updateEvent(idx, 'glow', e.target.value)} className="w-full bg-[#0d1117] border border-slate-800 p-2 rounded-xl text-[10px] text-slate-300 outline-none" placeholder="rgba(0,0,0,0.5)"/>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                `)}
                                             </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div>
-                                                    <label className="text-[9px] font-bold text-slate-600 uppercase mb-2 block tracking-widest">Semantic Version</label>
-                                                    <input 
-                                                        value=${noticeData.updates?.version || ''}
-                                                        onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, version: e.target.value}})}
-                                                        className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-orange-500 font-black outline-none focus:border-blue-500 transition-all"
-                                                        placeholder="e.g. 2.0.1"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-[9px] font-bold text-slate-600 uppercase mb-2 block tracking-widest">Change Summary</label>
-                                                    <input 
-                                                        value=${noticeData.updates?.items?.join(', ') || ''}
-                                                        onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, items: e.target.value.split(',').map(i => i.trim())}})}
-                                                        className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-slate-400 outline-none focus:border-blue-500 transition-all"
-                                                        placeholder="Fixed bugs, UI update, Performance..."
-                                                    />
-                                                </div>
+                                        </div>
+                                    ` : html`
+                                        <!-- Single Object Editors (Notice / Announcement) -->
+                                        <div className="space-y-8">
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3 pl-1">Primary Headline</label>
+                                                <input 
+                                                    value=${activeTab === 'notice' ? noticeData.title : announcementData.title}
+                                                    onChange=${e => activeTab === 'notice' ? setNoticeData({...noticeData, title: e.target.value}) : setAnnouncementData({...announcementData, title: e.target.value})}
+                                                    className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-xl font-bold text-white focus:border-orange-500 outline-none transition-all shadow-inner"
+                                                    placeholder="Headline..."
+                                                />
                                             </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3 pl-1">Body Content</label>
+                                                <textarea 
+                                                    value=${activeTab === 'notice' ? noticeData.message.join('\n') : announcementData.message}
+                                                    onChange=${e => activeTab === 'notice' ? setNoticeData({...noticeData, message: e.target.value.split('\n')}) : setAnnouncementData({...announcementData, message: e.target.value})}
+                                                    rows="10"
+                                                    className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-slate-300 leading-relaxed focus:border-orange-500 outline-none transition-all resize-none custom-scrollbar text-base shadow-inner"
+                                                    placeholder="Body text..."
+                                                ></textarea>
+                                            </div>
+                                            ${activeTab === 'notice' && html`
+                                                <div className="pt-8 border-t border-slate-800/50 grid grid-cols-2 gap-6">
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest">Version Tag</label>
+                                                        <input value=${noticeData.updates?.version || ''} onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, version: e.target.value}})} className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-orange-500 font-black outline-none"/>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest">Changelog Items</label>
+                                                        <input value=${noticeData.updates?.items?.join(', ') || ''} onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, items: e.target.value.split(',').map(i => i.trim())}})} className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-slate-400 outline-none"/>
+                                                    </div>
+                                                </div>
+                                            `}
                                         </div>
                                     `}
                                 </div>
 
                                 <button 
                                     onClick=${handlePublish}
-                                    disabled=${loading || !(activeTab === 'notice' ? shas.notice : shas.announcement)}
-                                    className="w-full mt-12 py-6 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black text-xl rounded-3xl shadow-2xl transition-all active:scale-[0.97] disabled:opacity-20 flex items-center justify-center gap-4 group uppercase tracking-[0.1em]"
+                                    disabled=${loading || !shas[activeTab]}
+                                    className="w-full mt-12 py-6 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black text-lg rounded-3xl shadow-2xl transition-all active:scale-[0.97] disabled:opacity-20 flex items-center justify-center gap-4 group uppercase tracking-widest"
                                 >
-                                    ${loading ? html`<div className="loader"></div>` : html`
-                                        <span className="text-2xl group-hover:-translate-y-1 transition-transform">🚀</span> 
-                                        <span>Apply Live Updates</span>
-                                    `}
+                                    ${loading ? html`<div className="loader"></div>` : html`<span>🚀 APPLY LIVE CHANGES</span>`}
                                 </button>
                             </section>
                         </div>
 
-                        <!-- Side Preview Panel -->
+                        <!-- Side Preview Section -->
                         <div className="lg:col-span-4 space-y-8">
-                            <section className="glass-panel p-8 rounded-[3rem] overflow-hidden border-slate-800/50 flex flex-col h-full">
+                            <section className="glass-panel p-8 rounded-[3rem] overflow-hidden border-slate-800/50 h-full flex flex-col">
                                 <h3 className="text-[10px] font-black mb-8 flex items-center gap-3 text-slate-500 uppercase tracking-[0.3em]">
-                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Visual Preview
+                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Dynamic Preview
                                 </h3>
                                 
-                                <div className="flex-1 min-h-[500px] bg-[#080a0e] rounded-[2.5rem] border border-slate-900 p-8 relative flex flex-col items-center justify-center overflow-hidden shadow-inner">
+                                <div className="flex-1 min-h-[500px] bg-[#080a0e] rounded-[2.5rem] border border-slate-900 p-6 relative flex flex-col gap-6 overflow-y-auto custom-scrollbar shadow-inner">
                                     
-                                    ${activeTab === 'notice' ? html`
-                                        <!-- Notice Card Preview Render -->
-                                        <div className=${`w-full transition-all duration-700 ${noticeData.show ? 'opacity-100' : 'opacity-10 scale-95 blur-sm'}`}>
-                                            <div className="bg-[#161a22] p-6 rounded-[2rem] border border-slate-800 shadow-2xl relative overflow-hidden group">
-                                                <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
-                                                <h4 className="text-orange-500 font-black text-xl uppercase tracking-tight mb-3 line-clamp-2">${noticeData.title || 'Board Title'}</h4>
-                                                <div className="space-y-2">
-                                                    ${noticeData.message.map((line, i) => html`<p key=${i} className="text-slate-400 text-xs leading-relaxed font-medium line-clamp-2">${line}</p>`)}
+                                    ${activeTab === 'events' ? html`
+                                        <!-- Events List Preview -->
+                                        ${eventsData.events.length === 0 ? html`<div className="h-full flex flex-col items-center justify-center opacity-10 text-slate-500 uppercase text-[10px] font-black tracking-widest">No Events Found</div>` : eventsData.events.map((ev, i) => html`
+                                            <div key=${i} className="event-preview-card p-6 rounded-[2rem] text-white shadow-2xl" style=${{
+                                                background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(',') || '#ff9800,#ff5722'})`,
+                                                boxShadow: `0 0 25px ${ev.theme?.glow || 'rgba(0,0,0,0.3)'}`
+                                            }}>
+                                                <h4 className="font-black text-lg uppercase mb-3 leading-tight">${ev.title || 'Event Title'}</h4>
+                                                <div className="space-y-2 opacity-90">
+                                                    ${ev.content.map((line, li) => html`<p key=${li} className="text-[11px] font-medium leading-relaxed">• ${line}</p>`)}
                                                 </div>
-                                                ${noticeData.updates?.version && html`
-                                                    <div className="mt-6 pt-4 border-t border-slate-800/80 flex justify-between items-center">
-                                                        <span className="bg-orange-600/10 text-orange-500 px-3 py-1 rounded-full text-[9px] font-black">${noticeData.updates.version}</span>
-                                                        <span className="text-slate-600 text-[8px] font-black uppercase tracking-widest">Update Log Available</span>
-                                                    </div>
-                                                `}
                                             </div>
+                                        `)}
+                                    ` : activeTab === 'notice' ? html`
+                                        <!-- Notice Preview -->
+                                        <div className="w-full bg-[#161a22] p-6 rounded-[2rem] border border-slate-800 shadow-2xl relative overflow-hidden">
+                                            <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
+                                            <h4 className="text-orange-500 font-black text-xl uppercase tracking-tight mb-4">${noticeData.title || 'Notice Title'}</h4>
+                                            <div className="space-y-3">
+                                                ${noticeData.message.map((line, i) => html`<p key=${i} className="text-slate-400 text-xs leading-relaxed font-medium">${line}</p>`)}
+                                            </div>
+                                            ${noticeData.updates?.version && html`
+                                                <div className="mt-8 pt-4 border-t border-slate-800/80 flex justify-between items-center text-[8px] font-black uppercase text-slate-600">
+                                                    <span className="text-orange-500">${noticeData.updates.version}</span>
+                                                    <span>Update Available</span>
+                                                </div>
+                                            `}
                                         </div>
                                     ` : html`
-                                        <!-- Announcement Modal Preview Render -->
-                                        <div className=${`absolute inset-0 bg-black/90 flex items-center justify-center p-6 transition-all duration-500 ${announcementData.show ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'}`}>
-                                            <div className="bg-gradient-to-br from-[#1e2329] to-[#0d1117] border border-slate-700 p-8 rounded-[2.5rem] shadow-[0_0_80px_rgba(249,115,22,0.15)] text-center animate-slide-up relative">
-                                                <div className="w-16 h-16 bg-orange-600 rounded-2xl mx-auto flex items-center justify-center text-3xl mb-6 shadow-xl shadow-orange-900/30">📢</div>
-                                                <h4 className="text-white font-black text-2xl leading-tight uppercase mb-4">${announcementData.title || 'Attention Required'}</h4>
-                                                <p className="text-slate-400 text-sm leading-relaxed mb-8 max-h-40 overflow-hidden line-clamp-5">${announcementData.message || 'Announcement description text...'}</p>
-                                                <div className="w-full bg-orange-600 hover:bg-orange-500 py-4 rounded-2xl text-[10px] font-black text-white uppercase tracking-[0.2em] transition-colors cursor-pointer">Acknowledge</div>
+                                        <!-- Popup Preview -->
+                                        <div className=${`absolute inset-0 bg-black/95 flex items-center justify-center p-6 transition-all ${announcementData.show ? 'opacity-100' : 'opacity-0'}`}>
+                                            <div className="bg-[#1e2329] p-8 rounded-[2.5rem] border border-slate-700 text-center shadow-2xl shadow-orange-900/20">
+                                                <div className="text-4xl mb-6">📢</div>
+                                                <h4 className="text-white font-black text-xl uppercase mb-4">${announcementData.title || 'System Alert'}</h4>
+                                                <p className="text-slate-400 text-xs leading-relaxed mb-8">${announcementData.message || 'Announcement content...'}</p>
+                                                <div className="py-3 bg-orange-600 text-white text-[9px] font-black uppercase rounded-2xl tracking-widest">Dismiss Modal</div>
                                             </div>
                                         </div>
-                                        ${!announcementData.show && html`
-                                            <div className="text-slate-800 font-black uppercase text-xs tracking-[0.3em] flex flex-col items-center gap-4">
-                                                <span className="text-4xl opacity-10">👁‍🗨</span>
-                                                Popup Inactive
-                                            </div>
-                                        `}
                                     `}
-
-                                    <!-- Display Meta Branding -->
-                                    <div className="absolute bottom-6 w-full text-center">
-                                        <div className="text-[7px] font-black text-slate-800 uppercase tracking-[0.6em]">Powered by RR International Intelligence</div>
-                                    </div>
                                 </div>
                             </section>
                         </div>
                     </div>
 
-                    <footer className="text-center py-12">
-                        <div className="flex items-center justify-center gap-4 mb-4 opacity-30">
-                            <div className="h-px w-10 bg-slate-800"></div>
-                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em]">Security First Management</div>
-                            <div className="h-px w-10 bg-slate-800"></div>
-                        </div>
-                        <p className="text-slate-700 text-[8px] font-bold uppercase tracking-[0.3em] px-4">
-                            All transactions are logged for internal auditing • Unauthorized access is strictly prohibited
-                        </p>
+                    <footer className="text-center py-10">
+                        <p className="text-slate-700 text-[8px] font-bold uppercase tracking-[0.4em]">RR International College • Encrypted Management Environment • v2.2</p>
                     </footer>
                 </div>
             `;
