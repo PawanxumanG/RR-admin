@@ -120,7 +120,6 @@
                     
                     const validKey = content.keys.find(k => k.key === loginKeyInput && k.isActive);
                     if (validKey) {
-                        // Check expiry
                         if (validKey.expiresAt) {
                             const expiryDate = new Date(validKey.expiresAt);
                             if (new Date() > expiryDate) {
@@ -308,11 +307,19 @@
                             `)}
                         </nav>
 
-                        <div className="flex gap-2">
-                            <button onClick=${handleLogout} className="px-5 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-[9px] font-black text-slate-400 hover:text-white uppercase transition-all">Logout</button>
-                            <button onClick=${() => handleSync()} disabled=${loading} className="px-5 py-3 bg-blue-600 rounded-2xl text-[9px] font-black text-white shadow-lg uppercase flex items-center gap-2">
-                                ${loading ? html`<div className="loader"></div>` : '🔄 Sync Live'}
-                            </button>
+                        <div className="flex flex-col items-end gap-2">
+                            <div className="flex gap-2">
+                                <button onClick=${handleLogout} className="px-5 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-[9px] font-black text-slate-400 hover:text-white uppercase transition-all">Logout</button>
+                                <button onClick=${() => handleSync()} disabled=${loading} className="px-5 py-3 bg-blue-600 rounded-2xl text-[9px] font-black text-white shadow-lg uppercase flex items-center gap-2">
+                                    ${loading ? html`<div className="loader"></div>` : '🔄 Sync Live'}
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">PAWAN PONNAM</span>
+                                <a href="https://wa.me/919867637326" target="_blank" className="bg-green-600 hover:bg-green-500 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg shadow-lg shadow-green-900/20 flex items-center gap-1.5 transition-all">
+                                    <span>💬 HELP</span>
+                                </a>
+                            </div>
                         </div>
                     </header>
 
