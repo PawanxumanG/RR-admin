@@ -127,7 +127,8 @@
             const [eventsData, setEventsData] = useState({ show: true, events: [] });
             const [loginData, setLoginData] = useState({ keys: [] });
 
-            const [shas, setShas] = useState({ notice: null, announcement: null, events: null, security: null });
+            // shas MUST use keys matching activeTab: 'notice', 'popup', 'events', 'security'
+            const [shas, setShas] = useState({ notice: null, popup: null, events: null, security: null });
             const [loading, setLoading] = useState(false);
             const [status, setStatus] = useState(null);
 
@@ -251,8 +252,9 @@
                     const data = await res.json();
                     const content = JSON.parse(safeB64Decode(data.content));
                     
+                    // Fixed: ensure SHA key matches targetTab exactly
                     if (targetTab === 'notice') { setNoticeData(content); setShas(p => ({...p, notice: data.sha})); }
-                    else if (targetTab === 'popup') { setAnnouncementData(content); setShas(p => ({...p, announcement: data.sha})); }
+                    else if (targetTab === 'popup') { setAnnouncementData(content); setShas(p => ({...p, popup: data.sha})); }
                     else if (targetTab === 'events') { setEventsData(content); setShas(p => ({...p, events: data.sha})); }
                     else if (targetTab === 'security') { setLoginData(content); setShas(p => ({...p, security: data.sha})); }
                     
@@ -267,10 +269,15 @@
             const handlePublish = async () => {
                 const mapping = { notice: 'notice.json', popup: 'announcement.json', events: 'events.json', security: 'login.json' };
                 const path = mapping[activeTab];
-                const currentSha = shas[activeTab];
-                if (!config.token || !currentSha) return notify('error', 'Sync data first.');
+                const currentSha = shas[activeTab]; // This was failing because of naming mismatch in handleSync
+
+                if (!config.token || !currentSha) {
+                    return notify('error', 'Sync data first.');
+                }
+                
                 setLoading(true);
                 const currentData = activeTab === 'notice' ? noticeData : activeTab === 'popup' ? announcementData : activeTab === 'events' ? eventsData : loginData;
+                
                 try {
                     const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`;
                     const body = {
@@ -283,7 +290,9 @@
                         headers: { 'Authorization': `token ${config.token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify(body)
                     });
+                    if (!res.ok) throw new Error('Update failed');
                     const resData = await res.json();
+                    // Update the local SHA with the new one from GitHub
                     setShas(prev => ({ ...prev, [activeTab]: resData.content.sha }));
                     notify('success', `Published: ${path}`);
                 } catch (err) {
