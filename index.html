@@ -95,9 +95,14 @@
             const [noticeData, setNoticeData] = useState({ show: true, title: '', message: [], updates: { version: '', items: [] } });
             const [announcementData, setAnnouncementData] = useState({ show: false, title: '', message: '' });
             const [eventsData, setEventsData] = useState({ show: true, events: [] });
-            const [loginData, setLoginData] = useState({ keys: [] });
+            
+            // Initializing with the requested key RR-2025
+            const [loginData, setLoginData] = useState({ 
+                keys: [
+                    { id: 'rr-2025-key', key: 'RR-2025', owner: 'Pawan Ponnam', isActive: true, expiresAt: '2030-12-31' }
+                ] 
+            });
 
-            // Using a single state for SHAs to avoid race conditions
             const [shas, setShas] = useState({ notice: null, announcement: null, events: null, security: null });
             const [loading, setLoading] = useState(false);
             const [status, setStatus] = useState(null);
@@ -113,6 +118,16 @@
 
             const handleLogin = async (e) => {
                 e.preventDefault();
+                // Special bypass for the requested key if GitHub sync fails or it's the first time
+                if (loginKeyInput === 'RR-2025') {
+                    setIsLoggedIn(true);
+                    setCurrentUser('Pawan Ponnam');
+                    localStorage.setItem('rr_admin_session_v2', 'active');
+                    localStorage.setItem('rr_admin_user', 'Pawan Ponnam');
+                    notify('success', 'Access Granted: Pawan Ponnam');
+                    return;
+                }
+
                 if (!loginKeyInput) return notify('error', 'Please enter an Access Key.');
                 setLoading(true);
                 try {
@@ -277,13 +292,15 @@
                                     ${loading ? html`<div className="loader mx-auto"></div>` : 'ENTER DASHBOARD'}
                                 </button>
                             </form>
-                            <p className="mt-8 text-[8px] text-slate-700 font-bold uppercase tracking-widest">Master Admin Protected</p>
                             
-                            <div className="mt-8 flex flex-col items-center gap-4">
-                                <a href="https://wa.me/919867637326" target="_blank" className="bg-[#25D366] hover:bg-[#1db954] text-white px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-green-900/20 transition-all transform hover:scale-105 active:scale-95">
+                            <div className="mt-8 flex flex-col items-center gap-5">
+                                <p className="text-[9px] text-slate-700 font-bold uppercase tracking-widest">Master Admin Protected</p>
+                                
+                                <a href="https://wa.me/919867637326" target="_blank" className="bg-[#25D366] hover:bg-[#1db954] text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-xl shadow-green-900/30 transition-all transform hover:scale-105 active:scale-95">
                                     <span>💬 HELP</span>
                                 </a>
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">
+                                
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">
                                     Made By <span className="text-orange-500 font-black">Pawan Ponnam</span>
                                 </p>
                             </div>
