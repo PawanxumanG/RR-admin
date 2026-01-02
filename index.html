@@ -286,13 +286,21 @@
                             `)}
                         </div>
 
-                        <div className="flex gap-2">
-                            <button onClick=${toggleSettings} className=${`px-5 py-3 rounded-2xl text-xs font-black border transition-all ${showSettings ? 'bg-white text-black' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
-                                ${showSettings ? '✕ Close' : '⚙️ Config'}
-                            </button>
-                            <button onClick=${handleSync} disabled=${loading} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-xs font-black text-white shadow-lg shadow-blue-900/30 disabled:opacity-50 flex items-center gap-2">
-                                ${loading ? html`<div className="loader"></div>` : html`🔄 Sync Live`}
-                            </button>
+                        <div className="flex flex-col items-center xl:items-end gap-2">
+                            <div className="flex gap-2">
+                                <button onClick=${toggleSettings} className=${`px-5 py-3 rounded-2xl text-xs font-black border transition-all ${showSettings ? 'bg-white text-black' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
+                                    ${showSettings ? '✕ Close' : '⚙️ Config'}
+                                </button>
+                                <button onClick=${handleSync} disabled=${loading} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-xs font-black text-white shadow-lg shadow-blue-900/30 disabled:opacity-50 flex items-center gap-2">
+                                    ${loading ? html`<div className="loader"></div>` : html`🔄 Sync Live`}
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 pr-2">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Pawan Ponnam</span>
+                                <a href="https://wa.me/919867637326" target="_blank" className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-[9px] font-black uppercase rounded-lg shadow-lg shadow-green-900/20 flex items-center gap-1 transition-all">
+                                    <span>💬 Help</span>
+                                </a>
+                            </div>
                         </div>
                     </header>
 
@@ -375,8 +383,8 @@
                                                                 <input value=${ev.title} onChange=${e => updateEvent(idx, 'title', e.target.value)} className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-2xl text-lg font-bold text-white outline-none focus:border-orange-500"/>
                                                             </div>
                                                             <div>
-                                                                <label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest pl-1">Description (Line by Line)</label>
-                                                                <textarea value=${ev.content.join('\n')} onChange=${e => updateEvent(idx, 'content', e.target.value)} rows="4" className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-2xl text-sm text-slate-400 outline-none focus:border-orange-500 resize-none custom-scrollbar" placeholder="One point per line..."></textarea>
+                                                                <label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest pl-1">Description (Full Text)</label>
+                                                                <textarea value=${ev.content.join('\n')} onChange=${e => updateEvent(idx, 'content', e.target.value)} rows="6" className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-2xl text-sm text-slate-400 outline-none focus:border-orange-500 resize-none custom-scrollbar" placeholder="One point per line..."></textarea>
                                                             </div>
                                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
                                                                 <div>
@@ -410,11 +418,11 @@
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3 pl-1">Body Content</label>
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3 pl-1">Body Content (Full Text)</label>
                                                 <textarea 
                                                     value=${activeTab === 'notice' ? noticeData.message.join('\n') : announcementData.message}
                                                     onChange=${e => activeTab === 'notice' ? setNoticeData({...noticeData, message: e.target.value.split('\n')}) : setAnnouncementData({...announcementData, message: e.target.value})}
-                                                    rows="10"
+                                                    rows="12"
                                                     className="w-full bg-[#0d1117] border border-slate-800 p-5 rounded-3xl text-slate-300 leading-relaxed focus:border-orange-500 outline-none transition-all resize-none custom-scrollbar text-base shadow-inner"
                                                     placeholder="Body text..."
                                                 ></textarea>
@@ -423,11 +431,22 @@
                                                 <div className="pt-8 border-t border-slate-800/50 grid grid-cols-2 gap-6">
                                                     <div>
                                                         <label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest">Version Tag</label>
-                                                        <input value=${noticeData.updates?.version || ''} onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, version: e.target.value}})} className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-orange-500 font-black outline-none"/>
+                                                        <textarea 
+                                                            value=${noticeData.updates?.version || ''} 
+                                                            onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, version: e.target.value}})} 
+                                                            rows="2"
+                                                            className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-orange-500 font-black outline-none resize-none"
+                                                        ></textarea>
                                                     </div>
                                                     <div>
                                                         <label className="text-[9px] font-black text-slate-600 uppercase mb-2 block tracking-widest">Changelog Items</label>
-                                                        <input value=${noticeData.updates?.items?.join(', ') || ''} onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, items: e.target.value.split(',').map(i => i.trim())}})} className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-slate-400 outline-none"/>
+                                                        <textarea 
+                                                            value=${noticeData.updates?.items?.join('\n') || ''} 
+                                                            onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, items: e.target.value.split('\n').map(i => i.trim())}})} 
+                                                            rows="4"
+                                                            className="w-full bg-black/40 border border-slate-800 p-4 rounded-2xl text-sm text-slate-400 outline-none resize-none custom-scrollbar"
+                                                            placeholder="Add updates here..."
+                                                        ></textarea>
                                                     </div>
                                                 </div>
                                             `}
@@ -449,7 +468,7 @@
                         <div className="lg:col-span-4 space-y-8">
                             <section className="glass-panel p-8 rounded-[3rem] overflow-hidden border-slate-800/50 h-full flex flex-col">
                                 <h3 className="text-[10px] font-black mb-8 flex items-center gap-3 text-slate-500 uppercase tracking-[0.3em]">
-                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Dynamic Preview
+                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Dynamic Preview (Full View)
                                 </h3>
                                 
                                 <div className="flex-1 min-h-[500px] bg-[#080a0e] rounded-[2.5rem] border border-slate-900 p-6 relative flex flex-col gap-6 overflow-y-auto custom-scrollbar shadow-inner">
@@ -461,9 +480,9 @@
                                                 background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(',') || '#ff9800,#ff5722'})`,
                                                 boxShadow: `0 0 25px ${ev.theme?.glow || 'rgba(0,0,0,0.3)'}`
                                             }}>
-                                                <h4 className="font-black text-lg uppercase mb-3 leading-tight">${ev.title || 'Event Title'}</h4>
+                                                <h4 className="font-black text-lg uppercase mb-3 leading-tight break-words">${ev.title || 'Event Title'}</h4>
                                                 <div className="space-y-2 opacity-90">
-                                                    ${ev.content.map((line, li) => html`<p key=${li} className="text-[11px] font-medium leading-relaxed">• ${line}</p>`)}
+                                                    ${ev.content.map((line, li) => html`<p key=${li} className="text-[11px] font-medium leading-relaxed break-words">• ${line}</p>`)}
                                                 </div>
                                             </div>
                                         `)}
@@ -471,24 +490,26 @@
                                         <!-- Notice Preview -->
                                         <div className="w-full bg-[#161a22] p-6 rounded-[2rem] border border-slate-800 shadow-2xl relative overflow-hidden">
                                             <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
-                                            <h4 className="text-orange-500 font-black text-xl uppercase tracking-tight mb-4">${noticeData.title || 'Notice Title'}</h4>
+                                            <h4 className="text-orange-500 font-black text-xl uppercase tracking-tight mb-4 break-words">${noticeData.title || 'Notice Title'}</h4>
                                             <div className="space-y-3">
-                                                ${noticeData.message.map((line, i) => html`<p key=${i} className="text-slate-400 text-xs leading-relaxed font-medium">${line}</p>`)}
+                                                ${noticeData.message.map((line, i) => html`<p key=${i} className="text-slate-400 text-xs leading-relaxed font-medium break-words">${line}</p>`)}
                                             </div>
                                             ${noticeData.updates?.version && html`
-                                                <div className="mt-8 pt-4 border-t border-slate-800/80 flex justify-between items-center text-[8px] font-black uppercase text-slate-600">
-                                                    <span className="text-orange-500">${noticeData.updates.version}</span>
-                                                    <span>Update Available</span>
+                                                <div className="mt-8 pt-4 border-t border-slate-800/80 flex flex-col gap-2 text-[8px] font-black uppercase text-slate-600">
+                                                    <span className="text-orange-500 break-words">${noticeData.updates.version}</span>
+                                                    <div className="flex flex-col gap-1">
+                                                        ${noticeData.updates.items.map((item, ii) => html`<span key=${ii} className="text-slate-500 break-words">• ${item}</span>`)}
+                                                    </div>
                                                 </div>
                                             `}
                                         </div>
                                     ` : html`
                                         <!-- Popup Preview -->
                                         <div className=${`absolute inset-0 bg-black/95 flex items-center justify-center p-6 transition-all ${announcementData.show ? 'opacity-100' : 'opacity-0'}`}>
-                                            <div className="bg-[#1e2329] p-8 rounded-[2.5rem] border border-slate-700 text-center shadow-2xl shadow-orange-900/20">
+                                            <div className="bg-[#1e2329] p-8 rounded-[2.5rem] border border-slate-700 text-center shadow-2xl shadow-orange-900/20 max-h-[90%] overflow-y-auto custom-scrollbar">
                                                 <div className="text-4xl mb-6">📢</div>
-                                                <h4 className="text-white font-black text-xl uppercase mb-4">${announcementData.title || 'System Alert'}</h4>
-                                                <p className="text-slate-400 text-xs leading-relaxed mb-8">${announcementData.message || 'Announcement content...'}</p>
+                                                <h4 className="text-white font-black text-xl uppercase mb-4 break-words">${announcementData.title || 'System Alert'}</h4>
+                                                <p className="text-slate-400 text-xs leading-relaxed mb-8 break-words">${announcementData.message || 'Announcement content...'}</p>
                                                 <div className="py-3 bg-orange-600 text-white text-[9px] font-black uppercase rounded-2xl tracking-widest">Dismiss Modal</div>
                                             </div>
                                         </div>
@@ -498,8 +519,23 @@
                         </div>
                     </div>
 
-                    <footer className="text-center py-10">
-                        <p className="text-slate-700 text-[8px] font-bold uppercase tracking-[0.4em]">RR International College • Encrypted Management Environment • v2.2</p>
+                    <footer className="text-center pt-24 pb-12 flex flex-col items-center gap-4">
+                        <div className="flex items-center gap-6 opacity-30">
+                            <div className="h-px w-12 bg-slate-500"></div>
+                            <span className="text-[7px] font-black uppercase tracking-[0.8em] text-slate-500">Official System</span>
+                            <div className="h-px w-12 bg-slate-500"></div>
+                        </div>
+                        
+                        <div className="flex flex-col items-center gap-1">
+                            <p className="text-slate-700 text-[9px] font-black uppercase tracking-[0.4em]">RR International College</p>
+                            <div className="flex items-center gap-3 bg-[#161b22] px-6 py-3 rounded-2xl border border-slate-800/50 shadow-xl whitespace-nowrap overflow-hidden">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Made By</span>
+                                <span className="h-4 w-px bg-slate-800"></span>
+                                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-orange-500">Pawan Ponnam</span>
+                            </div>
+                        </div>
+                        
+                        <p className="text-[7px] font-bold text-slate-800 uppercase tracking-[0.3em]">Encrypted Environment v2.2</p>
                     </footer>
                 </div>
             `;
