@@ -84,13 +84,6 @@
 
         const ADMIN_PASSWORD = "Pawan1645@";
 
-        const THEME_PRESETS = [
-            { name: 'Sunset Amber', card: 'linear-gradient(135deg, #161a22 0%, #2a1b12 100%)', btn: 'linear-gradient(90deg, #f97316 0%, #ea580c 100%)' },
-            { name: 'Midnight Blue', card: 'linear-gradient(135deg, #0d1117 0%, #161a22 100%)', btn: 'linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%)' },
-            { name: 'Emerald Night', card: 'linear-gradient(135deg, #161a22 0%, #064e3b 100%)', btn: 'linear-gradient(90deg, #10b981 0%, #059669 100%)' },
-            { name: 'Cyber Purple', card: 'linear-gradient(135deg, #161a22 0%, #4c1d95 100%)', btn: 'linear-gradient(90deg, #8b5cf6 0%, #7c3aed 100%)' }
-        ];
-
         const App = () => {
             const [activeTab, setActiveTab] = useState('notice'); 
             const [isUnlocked, setIsUnlocked] = useState(false);
@@ -101,12 +94,12 @@
                 return saved ? JSON.parse(saved) : { token: '', owner: '', repo: '' };
             });
 
+            // State for different files
             const [noticeData, setNoticeData] = useState({ show: true, title: '', message: [], updates: { version: '', items: [] } });
             const [announcementData, setAnnouncementData] = useState({ id: 'notice-default', show: false, title: '', message: '' });
             const [eventsData, setEventsData] = useState({ show: true, events: [] });
-            const [albumData, setAlbumData] = useState({ settings: { downloadPassword: '', theme: { cardGradient: '', buttonGradient: '' } }, events: [] });
 
-            const [shas, setShas] = useState({ notice: null, announcement: null, events: null, album: null });
+            const [shas, setShas] = useState({ notice: null, announcement: null, events: null });
             const [loading, setLoading] = useState(false);
             const [status, setStatus] = useState(null);
             const [showSettings, setShowSettings] = useState(false);
@@ -149,14 +142,12 @@
             const getCurrentFilePath = () => {
                 if(activeTab === 'notice') return 'notice.json';
                 if(activeTab === 'announcement') return 'announcement.json';
-                if(activeTab === 'album') return 'album.json';
                 return 'events.json';
             };
 
             const getDisplayName = () => {
                 if(activeTab === 'notice') return 'Notice Board';
                 if(activeTab === 'announcement') return 'Announcement Pop-up';
-                if(activeTab === 'album') return 'Event Album Gallery';
                 return 'Events Manager';
             };
 
@@ -182,9 +173,6 @@
                     } else if (activeTab === 'announcement') {
                         setAnnouncementData(content);
                         setShas(prev => ({ ...prev, announcement: data.sha }));
-                    } else if (activeTab === 'album') {
-                        setAlbumData(content);
-                        setShas(prev => ({ ...prev, album: data.sha }));
                     } else {
                         setEventsData(content);
                         setShas(prev => ({ ...prev, events: data.sha }));
@@ -208,7 +196,6 @@
                 let currentData;
                 if (activeTab === 'notice') currentData = noticeData;
                 else if (activeTab === 'announcement') currentData = { ...announcementData, id: 'ann-' + Date.now() };
-                else if (activeTab === 'album') currentData = albumData;
                 else currentData = eventsData;
 
                 try {
@@ -239,6 +226,7 @@
                 }
             };
 
+            // Helpers for Events
             const addEvent = () => {
                 const newEvent = {
                     title: 'New College Event',
@@ -272,6 +260,7 @@
                 setEventsData({ ...eventsData, events: newEvents });
             };
 
+            // Helpers for Notice Changelog
             const addChangelogItem = () => {
                 const currentItems = noticeData.updates?.items || [];
                 setNoticeData({
@@ -306,30 +295,6 @@
                 });
             };
 
-            const addAlbumEvent = () => {
-                const newEv = { title: 'New Album Section', description: 'Enter description here', images: [] };
-                setAlbumData({ ...albumData, events: [newEv, ...albumData.events] });
-            };
-
-            const applyThemePreset = (preset) => {
-                setAlbumData({
-                    ...albumData,
-                    settings: {
-                        ...albumData.settings,
-                        theme: {
-                            cardGradient: preset.card,
-                            buttonGradient: preset.btn
-                        }
-                    }
-                });
-            };
-
-            const addAlbumImage = (eIdx) => {
-                const evs = [...albumData.events];
-                evs[eIdx].images.push({ label: 'Photo Label', src: '', downloadName: 'photo.jpg' });
-                setAlbumData({ ...albumData, events: evs });
-            };
-
             return html`
                 <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-6">
                     
@@ -345,13 +310,13 @@
 
                         <!-- Segmented Navigation -->
                         <div className="bg-black/40 p-1 rounded-2xl flex flex-wrap justify-center items-center gap-1 border border-slate-800/50">
-                            ${['notice', 'announcement', 'events', 'album'].map(tab => html`
+                            ${['notice', 'announcement', 'events'].map(tab => html`
                                 <button 
                                     key=${tab}
                                     onClick=${() => setActiveTab(tab)}
                                     className=${`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === tab ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                                 >
-                                    ${tab === 'notice' ? 'Notices' : tab === 'announcement' ? 'Popup' : tab === 'events' ? 'Events' : 'Album'}
+                                    ${tab === 'notice' ? 'Notices' : tab === 'announcement' ? 'Popup' : 'Events'}
                                 </button>
                             `)}
                         </div>
@@ -426,10 +391,10 @@
                                         onClick=${() => {
                                             if(activeTab === 'notice') setNoticeData({...noticeData, show: !noticeData.show});
                                             else if(activeTab === 'announcement') setAnnouncementData({...announcementData, show: !announcementData.show});
-                                            else if(activeTab === 'events') setEventsData({...eventsData, show: !eventsData.show});
+                                            else setEventsData({...eventsData, show: !eventsData.show});
                                         }}
                                         className=${`px-5 py-2 rounded-full text-[9px] font-black transition-all border-2 ${
-                                            (activeTab === 'notice' ? noticeData.show : activeTab === 'announcement' ? announcementData.show : activeTab === 'events' ? eventsData.show : true) ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-500'
+                                            (activeTab === 'notice' ? noticeData.show : activeTab === 'announcement' ? announcementData.show : eventsData.show) ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-500'
                                         }`}
                                     >
                                         ● PUBLIC STATUS
@@ -437,128 +402,7 @@
                                 </div>
 
                                 <div className="space-y-8">
-                                    ${activeTab === 'album' ? html`
-                                        <!-- Album Gallery Editor -->
-                                        <div className="space-y-12">
-                                            <!-- Global Album Settings -->
-                                            <div className="bg-black/60 p-8 rounded-[2.5rem] border border-slate-800/50 space-y-8">
-                                                <div className="flex justify-between items-center border-b border-slate-800 pb-4">
-                                                    <h3 className="text-xs font-black uppercase text-orange-500 tracking-widest">Global Gallery Configuration</h3>
-                                                    <div className="flex gap-2">
-                                                        ${THEME_PRESETS.map(preset => html`
-                                                            <button 
-                                                                key=${preset.name}
-                                                                onClick=${() => applyThemePreset(preset)}
-                                                                className="w-6 h-6 rounded-lg border border-white/20 hover:scale-110 transition-transform shadow-lg"
-                                                                title=${preset.name}
-                                                                style=${{ background: preset.btn }}
-                                                            ></button>
-                                                        `)}
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-slate-500 uppercase mb-2 block tracking-widest">Download Access PIN</label>
-                                                        <input value=${albumData.settings?.downloadPassword} onChange=${e => setAlbumData({...albumData, settings: {...albumData.settings, downloadPassword: e.target.value}})} className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-2xl text-xs font-bold text-white outline-none focus:border-orange-500 shadow-inner" placeholder="Enter secure PIN..."/>
-                                                    </div>
-                                                    <div className="space-y-4">
-                                                        <label className="text-[9px] font-black text-slate-500 uppercase mb-2 block tracking-widest">Theme Customization (CSS Gradients)</label>
-                                                        <div className="space-y-3">
-                                                            <input value=${albumData.settings?.theme?.cardGradient} onChange=${e => setAlbumData({...albumData, settings: {...albumData.settings, theme: {...albumData.settings.theme, cardGradient: e.target.value}}})} className="w-full bg-[#0d1117] border border-slate-800 p-3 rounded-xl text-[9px] font-mono text-slate-400 outline-none focus:border-orange-500" placeholder="Card Gradient..."/>
-                                                            <input value=${albumData.settings?.theme?.buttonGradient} onChange=${e => setAlbumData({...albumData, settings: {...albumData.settings, theme: {...albumData.settings.theme, buttonGradient: e.target.value}}})} className="w-full bg-[#0d1117] border border-slate-800 p-3 rounded-xl text-[9px] font-mono text-slate-400 outline-none focus:border-orange-500" placeholder="Button Gradient..."/>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <button onClick=${addAlbumEvent} className="w-full py-5 border-2 border-dashed border-slate-800 rounded-[2rem] text-slate-600 hover:text-orange-500 hover:border-orange-500 transition-all font-black uppercase tracking-[0.2em] text-[10px] bg-black/20">
-                                                + Initialize New Album Category
-                                            </button>
-
-                                            <!-- Album Events List -->
-                                            <div className="space-y-16">
-                                                ${albumData.events.map((ev, eIdx) => html`
-                                                    <div key=${eIdx} className="bg-black/30 p-8 rounded-[3rem] border border-slate-800/40 space-y-8 animate-slide-up group/album-sec">
-                                                        <div className="flex justify-between items-start">
-                                                            <div className="flex-1 space-y-4">
-                                                                <label className="text-[8px] font-black text-slate-600 uppercase tracking-widest ml-1">Category Title</label>
-                                                                <input value=${ev.title} onChange=${e => {
-                                                                    const evs = [...albumData.events];
-                                                                    evs[eIdx].title = e.target.value;
-                                                                    setAlbumData({...albumData, events: evs});
-                                                                }} className="w-full bg-transparent border-b border-slate-800 p-2 text-2xl font-black text-white outline-none focus:border-orange-500" placeholder="e.g. Graduation 2024"/>
-                                                                <label className="text-[8px] font-black text-slate-600 uppercase tracking-widest ml-1 mt-4">Category Subtitle</label>
-                                                                <textarea value=${ev.description} onChange=${e => {
-                                                                    const evs = [...albumData.events];
-                                                                    evs[eIdx].description = e.target.value;
-                                                                    setAlbumData({...albumData, events: evs});
-                                                                }} className="w-full bg-transparent border-b border-slate-800 p-2 text-sm text-slate-400 outline-none focus:border-orange-500 resize-none" placeholder="Enter context..."></textarea>
-                                                            </div>
-                                                            <button onClick=${() => {
-                                                                const evs = albumData.events.filter((_, i) => i !== eIdx);
-                                                                setAlbumData({...albumData, events: evs});
-                                                            }} className="ml-4 w-12 h-12 bg-red-900/10 hover:bg-red-600 text-red-500 hover:text-white rounded-[1.25rem] flex items-center justify-center transition-all shadow-lg">✕</button>
-                                                        </div>
-
-                                                        <!-- Image Grid Editor -->
-                                                        <div className="space-y-6 pt-6 border-t border-slate-800/50">
-                                                            <div className="flex justify-between items-center">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
-                                                                    <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Image Portfolio (${ev.images.length})</h4>
-                                                                </div>
-                                                                <button onClick=${() => addAlbumImage(eIdx)} className="bg-orange-600 hover:bg-orange-500 text-white px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-900/20">+ Add Photo Slot</button>
-                                                            </div>
-                                                            
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                                ${ev.images.map((img, iIdx) => html`
-                                                                    <div key=${iIdx} className="bg-black/60 p-5 rounded-[2rem] border border-slate-800/30 flex flex-col gap-4 group/img transition-all hover:border-orange-500/30">
-                                                                        <div className="flex justify-between items-center">
-                                                                            <span className="text-[9px] font-black text-slate-700 uppercase tracking-tighter">Slot #${iIdx + 1}</span>
-                                                                            <button onClick=${() => {
-                                                                                const evs = [...albumData.events];
-                                                                                evs[eIdx].images = evs[eIdx].images.filter((_, i) => i !== iIdx);
-                                                                                setAlbumData({...albumData, events: evs});
-                                                                            }} className="text-red-500 hover:text-red-400 text-xs font-black">✕</button>
-                                                                        </div>
-                                                                        
-                                                                        <div className="flex gap-4">
-                                                                            <div className="w-24 h-24 rounded-2xl bg-black/80 flex items-center justify-center overflow-hidden border border-slate-800 shrink-0">
-                                                                                ${img.src ? html`<img src=${img.src} className="w-full h-full object-cover"/>` : html`<span className="text-[8px] text-slate-800 font-black">NO PREVIEW</span>`}
-                                                                            </div>
-                                                                            <div className="flex-1 space-y-3">
-                                                                                <input value=${img.label} onChange=${e => {
-                                                                                    const evs = [...albumData.events];
-                                                                                    evs[eIdx].images[iIdx].label = e.target.value;
-                                                                                    setAlbumData({...albumData, events: evs});
-                                                                                }} className="w-full bg-transparent border-b border-slate-800/40 p-1 text-[11px] font-bold text-white outline-none focus:border-orange-500" placeholder="Display Label..."/>
-                                                                                <input value=${img.src} onChange=${e => {
-                                                                                    const evs = [...albumData.events];
-                                                                                    evs[eIdx].images[iIdx].src = e.target.value;
-                                                                                    setAlbumData({...albumData, events: evs});
-                                                                                }} className="w-full bg-transparent border-b border-slate-800/40 p-1 text-[9px] text-orange-500/70 outline-none focus:border-orange-500" placeholder="Direct Image URL..."/>
-                                                                                <input value=${img.downloadName} onChange=${e => {
-                                                                                    const evs = [...albumData.events];
-                                                                                    evs[eIdx].images[iIdx].downloadName = e.target.value;
-                                                                                    setAlbumData({...albumData, events: evs});
-                                                                                }} className="w-full bg-transparent border-b border-slate-800/40 p-1 text-[9px] text-slate-600 outline-none focus:border-orange-500" placeholder="File Download Name..."/>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                `)}
-                                                            </div>
-                                                            ${ev.images.length === 0 && html`
-                                                                <div className="text-center py-12 bg-black/20 rounded-[2rem] border border-dashed border-slate-800/40">
-                                                                    <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">No media found in this section</p>
-                                                                </div>
-                                                            `}
-                                                        </div>
-                                                    </div>
-                                                `)}
-                                            </div>
-                                        </div>
-                                    ` : activeTab === 'events' ? html`
+                                    ${activeTab === 'events' ? html`
                                         <!-- Events Array Editor -->
                                         <div className="space-y-10">
                                             <button onClick=${addEvent} className="w-full py-4 border-2 border-dashed border-slate-800 rounded-3xl text-slate-500 hover:text-orange-500 hover:border-orange-500 transition-all font-black uppercase tracking-widest text-[10px]">
@@ -686,31 +530,7 @@
                                 
                                 <div className="flex-1 min-h-[500px] bg-[#080a0e] rounded-[2.5rem] border border-slate-900 p-6 relative flex flex-col gap-6 overflow-y-auto custom-scrollbar shadow-inner">
                                     
-                                    ${activeTab === 'album' ? html`
-                                        <!-- Album Preview -->
-                                        <div className="space-y-10 w-full">
-                                            ${albumData.events.map((ev, i) => html`
-                                                <div key=${i} className="space-y-4">
-                                                    <h4 className="text-sm font-black uppercase text-white tracking-widest border-l-4 border-orange-500 pl-3">${ev.title || 'Untitled Section'}</h4>
-                                                    <p className="text-[10px] text-slate-500 italic px-1">${ev.description}</p>
-                                                    <div className="space-y-4">
-                                                        ${ev.images.map((img, ii) => html`
-                                                            <div key=${ii} className="p-5 rounded-[1.75rem] text-center shadow-2xl border border-white/5" style=${{background: albumData.settings?.theme?.cardGradient || '#161a22'}}>
-                                                                <h5 className="text-[11px] font-black text-white uppercase mb-3 break-words tracking-widest">${img.label || 'Pending Label...'}</h5>
-                                                                <div className="aspect-video bg-black/40 rounded-2xl overflow-hidden flex items-center justify-center text-[8px] text-slate-800 uppercase font-black">
-                                                                    ${img.src ? html`<img src=${img.src} className="w-full h-full object-cover"/>` : 'MISSING ASSET'}
-                                                                </div>
-                                                                <div className="mt-4 py-2.5 px-6 rounded-full text-[9px] font-black text-white shadow-xl mx-auto inline-block uppercase tracking-[0.2em]" style=${{background: albumData.settings?.theme?.buttonGradient || '#f97316'}}>
-                                                                    ⬇ DOWNLOAD
-                                                                </div>
-                                                            </div>
-                                                        `)}
-                                                    </div>
-                                                </div>
-                                            `)}
-                                            ${albumData.events.length === 0 && html`<div className="h-full flex flex-col items-center justify-center opacity-5 text-slate-500 uppercase text-[10px] font-black tracking-widest">Portfolio Empty</div>`}
-                                        </div>
-                                    ` : activeTab === 'events' ? html`
+                                    ${activeTab === 'events' ? html`
                                         <!-- Events List Preview -->
                                         ${eventsData.events.length === 0 ? html`<div className="h-full flex flex-col items-center justify-center opacity-10 text-slate-500 uppercase text-[10px] font-black tracking-widest">No Events Found</div>` : eventsData.events.map((ev, i) => html`
                                             <div key=${i} className="event-preview-card p-6 rounded-[2rem] text-white shadow-2xl" style=${{
