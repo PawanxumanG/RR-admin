@@ -1,1 +1,1 @@
-// Logic consolidated to index.html
+// Logic moved to index.html

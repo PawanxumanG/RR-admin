@@ -1,1 +1,1 @@
-// All logic moved to index.html to avoid MIME issues
+// Logic moved to index.html

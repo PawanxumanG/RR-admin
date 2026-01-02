@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,12 +29,24 @@
             background: #30363d;
             border-radius: 10px;
         }
-        @keyframes pulse-slow {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .animate-pulse-slow {
-            animation: pulse-slow 3s infinite ease-in-out;
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        .loader {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #f97316;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
     <script type="importmap">
@@ -50,85 +61,38 @@
     </script>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <!-- Initial fallback if JS fails -->
+        <div style="display: flex; height: 100vh; align-items: center; justify-content: center; background: #0d1117; color: white;">
+            <div style="text-align: center;">
+                <div class="loader" style="margin: 0 auto 1rem;"></div>
+                <p style="font-family: sans-serif; font-size: 14px; color: #8b949e;">Initializing Admin Dashboard...</p>
+            </div>
+        </div>
+    </div>
 
     <script type="module">
-        import React, { useState, useEffect, useMemo } from 'react';
+        import React, { useState, useEffect } from 'react';
         import ReactDOM from 'react-dom/client';
         import { GoogleGenAI } from "@google/genai";
         import htm from 'htm';
 
         const html = htm.bind(React.createElement);
 
-        // --- Services ---
-        
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+        // Utility to handle Unicode with btoa/atob
+        const safeB64Encode = (str) => btoa(unescape(encodeURIComponent(str)));
+        const safeB64Decode = (str) => decodeURIComponent(escape(atob(str)));
 
-        const refineNotice = async (title, message, tone) => {
-            try {
-                const response = await ai.models.generateContent({
-                    model: 'gemini-3-flash-preview',
-                    contents: `You are an expert communications officer for RR International College. 
-                    I have a notice title: "${title}" and message: "${message}".
-                    Please rewrite this to be ${tone}. 
-                    Keep it professional but engaging. 
-                    Return only the rewritten message text, no conversational filler or markdown code blocks.`,
-                });
-                return response.text || message;
-            } catch (error) {
-                console.error("Gemini refinement error:", error);
-                throw error;
-            }
-        };
-
-        const githubService = {
-            async fetchFile(config) {
-                const { owner, repo, path, token } = config;
-                const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-                const response = await fetch(url, {
-                    headers: {
-                        'Authorization': `token ${token}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                });
-                if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
-                const data = await response.json();
-                return {
-                    content: JSON.parse(atob(data.content)),
-                    sha: data.sha
-                };
-            },
-            async updateFile(config, announcement, sha) {
-                const { owner, repo, path, token } = config;
-                const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-                const contentBase64 = btoa(JSON.stringify(announcement, null, 2));
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Notice Update: ${announcement.title}`,
-                        content: contentBase64,
-                        sha: sha
-                    })
-                });
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.message || 'Update failed');
-                }
-                return await response.json();
-            }
-        };
-
-        // --- Components ---
+        // --- App Component ---
 
         const App = () => {
             const [config, setConfig] = useState(() => {
-                const saved = localStorage.getItem('rr_admin_config_v2');
-                return saved ? JSON.parse(saved) : { token: '', owner: '', repo: '', path: 'announcement.json' };
+                try {
+                    const saved = localStorage.getItem('rr_admin_config_v3');
+                    return saved ? JSON.parse(saved) : { token: '', owner: '', repo: '', path: 'announcement.json' };
+                } catch {
+                    return { token: '', owner: '', repo: '', path: 'announcement.json' };
+                }
             });
 
             const [announcement, setAnnouncement] = useState({
@@ -145,12 +109,12 @@
             const [showSettings, setShowSettings] = useState(false);
 
             useEffect(() => {
-                localStorage.setItem('rr_admin_config_v2', JSON.stringify(config));
+                localStorage.setItem('rr_admin_config_v3', JSON.stringify(config));
             }, [config]);
 
             const notify = (type, message) => {
                 setStatus({ type, message });
-                setTimeout(() => setStatus(null), 4000);
+                setTimeout(() => setStatus(null), 5000);
             };
 
             const handleFetch = async () => {
@@ -161,10 +125,19 @@
                 }
                 setLoading(true);
                 try {
-                    const { content, sha } = await githubService.fetchFile(config);
+                    const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `token ${config.token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+                    if (!response.ok) throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+                    const data = await response.json();
+                    const content = JSON.parse(safeB64Decode(data.content));
                     setAnnouncement(content);
-                    setCurrentSha(sha);
-                    notify('success', 'Live notice data fetched successfully.');
+                    setCurrentSha(data.sha);
+                    notify('success', 'Live notice fetched successfully.');
                 } catch (err) {
                     notify('error', err.message);
                 } finally {
@@ -174,15 +147,35 @@
 
             const handleSave = async () => {
                 if (!config.token || !currentSha) {
-                    notify('error', 'Fetch latest data before saving changes.');
+                    notify('error', 'Sync with GitHub before publishing.');
                     return;
                 }
                 setLoading(true);
                 try {
                     const updated = { ...announcement, id: 'notice-' + Date.now() };
-                    await githubService.updateFile(config, updated, currentSha);
-                    notify('success', 'Published! Changes are now live.');
-                    await handleFetch(); 
+                    const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
+                    const body = {
+                        message: `Admin Notice Update: ${updated.title}`,
+                        content: safeB64Encode(JSON.stringify(updated, null, 2)),
+                        sha: currentSha
+                    };
+                    const response = await fetch(url, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${config.token}`,
+                            'Accept': 'application/vnd.github.v3+json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(body)
+                    });
+                    if (!response.ok) {
+                        const errData = await response.json();
+                        throw new Error(errData.message || 'Update failed');
+                    }
+                    notify('success', 'Published successfully! Site will update shortly.');
+                    // Re-sync to get new SHA
+                    const freshData = await response.json();
+                    setCurrentSha(freshData.content.sha);
                 } catch (err) {
                     notify('error', err.message);
                 } finally {
@@ -192,141 +185,153 @@
 
             const handleAIPolish = async (tone) => {
                 if (!announcement.title || !announcement.message) {
-                    notify('error', 'Enter content before refining.');
+                    notify('error', 'Content required for AI refinement.');
                     return;
                 }
                 setIsRefining(true);
                 try {
-                    const result = await refineNotice(announcement.title, announcement.message, tone);
-                    setAnnouncement(prev => ({ ...prev, message: result }));
-                    notify('success', `Content polished to ${tone} tone.`);
+                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-3-flash-preview',
+                        contents: `As a professional college registrar, rewrite this notice to be ${tone}. 
+                        Original Title: ${announcement.title}
+                        Original Message: ${announcement.message}
+                        Only return the new message body text. No preamble or markdown.`,
+                    });
+                    const result = response.text;
+                    if (result) {
+                        setAnnouncement(prev => ({ ...prev, message: result }));
+                        notify('success', `AI refined content to ${tone} tone.`);
+                    }
                 } catch (err) {
-                    notify('error', 'AI refinement failed.');
+                    notify('error', 'Gemini AI failed: ' + err.message);
                 } finally {
                     setIsRefining(false);
                 }
             };
 
             return html`
-                <div className="min-h-screen p-4 md:p-10 flex flex-col gap-8 max-w-6xl mx-auto">
+                <div className="min-h-screen p-4 md:p-8 flex flex-col gap-6 max-w-6xl mx-auto animate-fade-in">
                     <!-- Header -->
-                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-8">
+                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#161b22] p-6 rounded-3xl border border-slate-800 shadow-xl">
                         <div>
-                            <h1 className="text-4xl font-black text-white tracking-tight flex items-center gap-3">
-                                <span className="bg-orange-600 w-3 h-10 rounded-full block"></span>
-                                RR College Admin
-                            </h1>
-                            <p className="text-slate-500 font-medium mt-1">Live Noticeboard Control System</p>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center font-black text-xl text-white shadow-lg shadow-orange-900/20">RR</div>
+                                <h1 className="text-2xl font-extrabold text-white tracking-tight">College Admin Panel</h1>
+                            </div>
+                            <p className="text-slate-500 text-sm mt-1 ml-1">v2.5 Notice Management System</p>
                         </div>
-                        <div className="flex gap-3">
+                        <div className="flex gap-2 w-full md:w-auto">
                             <button 
                                 onClick=${() => setShowSettings(!showSettings)}
-                                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-bold border border-slate-700 transition-all flex items-center gap-2"
+                                className="flex-1 md:flex-none px-4 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-bold border border-slate-700 transition-all flex items-center justify-center gap-2"
                             >
-                                ⚙️ Settings
+                                ⚙️ Config
                             </button>
                             <button 
                                 onClick=${handleFetch}
                                 disabled=${loading}
-                                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                                className="flex-1 md:flex-none px-4 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                             >
-                                ${loading ? '⏳' : '🔄'} Sync Live
+                                ${loading ? html`<div className="loader"></div>` : '🔄 Sync Live'}
                             </button>
                         </div>
                     </header>
 
-                    <!-- Notifications -->
+                    <!-- Status Notification -->
                     ${status && html`
-                        <div className=${`fixed top-6 right-6 z-50 p-4 rounded-2xl border shadow-2xl flex items-center gap-3 animate-bounce-in ${
-                            status.type === 'success' ? 'bg-green-900/20 border-green-500/50 text-green-400' :
-                            status.type === 'error' ? 'bg-red-900/20 border-red-500/50 text-red-400' :
-                            'bg-blue-900/20 border-blue-500/50 text-blue-400'
+                        <div className=${`fixed bottom-6 right-6 z-50 p-4 rounded-2xl border shadow-2xl flex items-center gap-3 animate-fade-in ${
+                            status.type === 'success' ? 'bg-green-900/90 border-green-500/50 text-green-100' :
+                            status.type === 'error' ? 'bg-red-900/90 border-red-500/50 text-red-100' :
+                            'bg-blue-900/90 border-blue-500/50 text-blue-100'
                         }`}>
                             <span className="text-lg">${status.type === 'success' ? '✅' : status.type === 'error' ? '❌' : 'ℹ️'}</span>
                             <span className="font-semibold text-sm">${status.message}</span>
                         </div>
                     `}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         
                         <!-- Left: Editor -->
-                        <div className="lg:col-span-8 space-y-8">
+                        <div className="lg:col-span-8 space-y-6">
                             
-                            <!-- GitHub Settings Panel -->
+                            <!-- Settings Panel -->
                             ${showSettings && html`
-                                <section className="glass-panel p-6 rounded-3xl animate-in slide-in-from-top-4 duration-300">
-                                    <h3 className="text-xl font-bold mb-5 flex items-center gap-2 text-orange-500">
-                                        🛠️ GitHub Integration
-                                    </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <section className="glass-panel p-6 rounded-3xl animate-fade-in border-orange-500/20 bg-orange-500/5">
+                                    <div className="flex justify-between items-center mb-5">
+                                        <h3 className="text-lg font-bold flex items-center gap-2 text-orange-500">
+                                            🛠️ GitHub Integration
+                                        </h3>
+                                        <button onClick=${() => setShowSettings(false)} className="text-slate-500 hover:text-white">✕</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="col-span-full">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Personal Access Token</label>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Personal Access Token</label>
                                             <input 
                                                 type="password"
                                                 value=${config.token}
                                                 onChange=${e => setConfig({...config, token: e.target.value})}
-                                                className="w-full bg-black/50 border border-slate-700 p-3 rounded-xl focus:border-orange-500 outline-none transition-all"
+                                                className="w-full bg-black/40 border border-slate-700 p-3 rounded-xl focus:border-orange-500 outline-none transition-all text-sm"
                                                 placeholder="ghp_..."
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Owner</label>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Owner / Username</label>
                                             <input 
                                                 value=${config.owner}
                                                 onChange=${e => setConfig({...config, owner: e.target.value})}
-                                                className="w-full bg-black/50 border border-slate-700 p-3 rounded-xl focus:border-orange-500 outline-none"
-                                                placeholder="e.g. RR-College-Dev"
+                                                className="w-full bg-black/40 border border-slate-700 p-3 rounded-xl focus:border-orange-500 outline-none text-sm"
+                                                placeholder="e.g. RR-College"
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Repo</label>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Repository Name</label>
                                             <input 
                                                 value=${config.repo}
                                                 onChange=${e => setConfig({...config, repo: e.target.value})}
-                                                className="w-full bg-black/50 border border-slate-700 p-3 rounded-xl focus:border-orange-500 outline-none"
-                                                placeholder="e.g. college-website"
+                                                className="w-full bg-black/40 border border-slate-700 p-3 rounded-xl focus:border-orange-500 outline-none text-sm"
+                                                placeholder="e.g. website-data"
                                             />
                                         </div>
                                     </div>
-                                    <p className="mt-4 text-xs text-slate-500 italic">Configuration is saved in your browser storage only.</p>
                                 </section>
                             `}
 
-                            <!-- Main Editor -->
-                            <section className="glass-panel p-8 rounded-3xl shadow-2xl relative">
-                                <div className="flex justify-between items-center mb-8">
-                                    <h2 className="text-2xl font-bold text-white">Notice Composer</h2>
+                            <!-- Notice Composer -->
+                            <section className="glass-panel p-6 md:p-8 rounded-3xl shadow-2xl">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-bold text-white">Notice Composer</h2>
                                     <div className="flex items-center gap-3">
-                                        <span className=${`text-xs font-bold px-3 py-1 rounded-full ${announcement.show ? 'bg-green-900/40 text-green-400' : 'bg-slate-800 text-slate-500'}`}>
-                                            ${announcement.show ? '● ACTIVE' : '○ HIDDEN'}
+                                        <span className=${`text-[10px] font-black px-2 py-0.5 rounded tracking-tighter ${announcement.show ? 'bg-green-500 text-black' : 'bg-slate-700 text-slate-400'}`}>
+                                            ${announcement.show ? 'LIVE' : 'DRAFT'}
                                         </span>
                                         <button 
                                             onClick=${() => setAnnouncement({...announcement, show: !announcement.show})}
-                                            className=${`w-14 h-7 rounded-full transition-all relative p-1 ${announcement.show ? 'bg-orange-600' : 'bg-slate-700'}`}
+                                            className=${`w-12 h-6 rounded-full transition-all relative p-1 ${announcement.show ? 'bg-orange-600' : 'bg-slate-700'}`}
                                         >
-                                            <div className=${`w-5 h-5 bg-white rounded-full transition-all ${announcement.show ? 'translate-x-7' : 'translate-x-0'}`}></div>
+                                            <div className=${`w-4 h-4 bg-white rounded-full transition-all ${announcement.show ? 'translate-x-6' : 'translate-x-0'}`}></div>
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="space-y-6">
+                                <div className="space-y-5">
                                     <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Headline</label>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Notice Headline</label>
                                         <input 
                                             value=${announcement.title}
                                             onChange=${e => setAnnouncement({...announcement, title: e.target.value})}
-                                            className="w-full bg-[#0d1117] border border-slate-700 p-4 rounded-2xl text-lg font-bold text-white focus:border-orange-500 outline-none transition-all placeholder:text-slate-700"
-                                            placeholder="e.g. HOLIDAY ANNOUNCEMENT"
+                                            className="w-full bg-[#0d1117] border border-slate-700 p-4 rounded-xl text-lg font-bold text-white focus:border-orange-500 outline-none transition-all placeholder:text-slate-800"
+                                            placeholder="e.g. SEMESTER EXAMINATION SCHEDULE"
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Message Body</label>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Detailed Message</label>
                                         <textarea 
                                             value=${announcement.message}
                                             onChange=${e => setAnnouncement({...announcement, message: e.target.value})}
                                             rows="8"
-                                            className="w-full bg-[#0d1117] border border-slate-700 p-4 rounded-2xl text-slate-300 leading-relaxed focus:border-orange-500 outline-none transition-all resize-none custom-scrollbar"
-                                            placeholder="Enter the notice content here..."
+                                            className="w-full bg-[#0d1117] border border-slate-700 p-4 rounded-xl text-slate-300 leading-relaxed focus:border-orange-500 outline-none transition-all resize-none custom-scrollbar text-sm"
+                                            placeholder="Write the full notice content here..."
                                         ></textarea>
                                     </div>
                                 </div>
@@ -334,77 +339,87 @@
                                 <button 
                                     onClick=${handleSave}
                                     disabled=${loading || !currentSha}
-                                    className="w-full mt-10 py-5 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black text-xl rounded-2xl shadow-2xl shadow-orange-900/30 transition-all active:scale-[0.98] disabled:opacity-20"
+                                    className="w-full mt-8 py-4 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black text-lg rounded-2xl shadow-xl shadow-orange-900/30 transition-all active:scale-[0.98] disabled:opacity-30 flex items-center justify-center gap-3"
                                 >
-                                    ${loading ? 'PUBLISHING CHANGES...' : '🚀 PUSH TO LIVE SITE'}
+                                    ${loading ? html`<div className="loader"></div>` : '🚀 Publish Live Update'}
                                 </button>
                                 
                                 ${!currentSha && html`
-                                    <p className="text-center text-xs text-slate-500 mt-4 animate-pulse">Sync with GitHub repository to enable publishing.</p>
+                                    <div className="text-center bg-red-900/10 border border-red-500/20 p-2 rounded-lg mt-4">
+                                        <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">⚠️ Sync required before publishing</p>
+                                    </div>
                                 `}
                             </section>
                         </div>
 
                         <!-- Right: AI & Preview -->
-                        <div className="lg:col-span-4 space-y-8">
+                        <div className="lg:col-span-4 space-y-6">
                             
-                            <!-- AI Polishing -->
-                            <section className="glass-panel p-6 rounded-3xl">
-                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                    <span className="text-purple-400">✨</span> Gemini AI Polish
+                            <!-- Gemini AI Sidebar -->
+                            <section className="glass-panel p-6 rounded-3xl border-purple-500/20 bg-purple-500/5">
+                                <h3 className="text-sm font-black mb-4 flex items-center gap-2 text-purple-400 uppercase tracking-widest">
+                                    ✨ Gemini Smart Polish
                                 </h3>
-                                <div className="grid grid-cols-2 gap-3">
-                                    ${['Professional', 'Exciting', 'Concise', 'Urgent'].map(tone => html`
+                                <div className="grid grid-cols-1 gap-2">
+                                    ${['Formal', 'Friendly', 'Concise', 'Urgent'].map(tone => html`
                                         <button 
                                             key=${tone}
                                             disabled=${isRefining}
                                             onClick=${() => handleAIPolish(tone)}
-                                            className="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold border border-slate-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                            className="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold border border-slate-700 transition-all flex items-center justify-between group disabled:opacity-50"
                                         >
-                                            ${isRefining ? '...' : tone}
+                                            <span className="text-slate-300">${tone}</span>
+                                            <span className="opacity-0 group-hover:opacity-100 transition-opacity">✨</span>
                                         </button>
                                     `)}
                                 </div>
                                 ${isRefining && html`
-                                    <div className="mt-4 text-[10px] text-purple-400 text-center uppercase tracking-widest font-black animate-pulse">
-                                        AI is crafting your message...
+                                    <div className="mt-4 flex items-center justify-center gap-2">
+                                        <div className="loader"></div>
+                                        <span className="text-[10px] text-purple-400 font-black uppercase tracking-widest">AI Refinement in progress...</span>
                                     </div>
                                 `}
                             </section>
 
                             <!-- Visual Preview -->
-                            <section className="glass-panel p-6 rounded-3xl overflow-hidden">
-                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-400">
-                                    🖼️ Live Preview
+                            <section className="glass-panel p-6 rounded-3xl overflow-hidden border-slate-700/50">
+                                <h3 className="text-xs font-black mb-4 flex items-center gap-2 text-slate-500 uppercase tracking-widest">
+                                    🖼️ On-Site Preview
                                 </h3>
-                                <div className="aspect-[4/5] bg-black rounded-2xl border border-slate-800 p-5 relative flex flex-col items-center justify-center text-center">
+                                <div className="aspect-[3/4] bg-[#0d1117] rounded-2xl border border-slate-800 p-4 relative overflow-hidden">
                                     ${announcement.show ? html`
-                                        <div className="bg-gradient-to-br from-orange-600 to-amber-600 p-6 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-500 w-full">
-                                            <div className="text-2xl mb-3">📢</div>
-                                            <h4 className="text-white font-black text-lg leading-tight uppercase mb-3">
-                                                ${announcement.title || 'Draft Notice'}
-                                            </h4>
-                                            <div className="w-12 h-1 bg-white/30 mx-auto rounded-full mb-4"></div>
-                                            <p className="text-white/90 text-sm leading-relaxed line-clamp-6">
-                                                ${announcement.message || 'Waiting for message content...'}
-                                            </p>
+                                        <div className="h-full flex flex-col items-center justify-center text-center p-2 animate-fade-in">
+                                            <div className="w-full bg-gradient-to-br from-orange-600 to-amber-600 p-5 rounded-2xl shadow-2xl">
+                                                <div className="text-xl mb-2">📣</div>
+                                                <h4 className="text-white font-black text-sm uppercase mb-2 border-b border-white/20 pb-2">
+                                                    ${announcement.title || 'Draft Title'}
+                                                </h4>
+                                                <p className="text-white/90 text-[11px] leading-relaxed line-clamp-[10] whitespace-pre-line text-left">
+                                                    ${announcement.message || 'Draft message content...'}
+                                                </p>
+                                            </div>
                                         </div>
                                     ` : html`
-                                        <div className="text-slate-700 flex flex-col items-center">
-                                            <span className="text-4xl mb-3 opacity-20">🙈</span>
-                                            <p className="text-xs font-bold uppercase tracking-widest">Notice is Hidden</p>
+                                        <div className="h-full flex flex-col items-center justify-center opacity-30 text-slate-500">
+                                            <span className="text-5xl mb-4">🌫️</span>
+                                            <p className="text-[10px] font-black uppercase tracking-widest">Display is Offline</p>
                                         </div>
                                     `}
-                                    <div className="absolute bottom-4 left-0 w-full text-[9px] text-slate-700 font-black uppercase tracking-[0.2em]">
-                                        RR College Digital Display
+                                    <div className="absolute top-2 left-0 w-full flex justify-center">
+                                        <div className="h-1.5 w-12 bg-slate-800 rounded-full"></div>
+                                    </div>
+                                    <div className="absolute bottom-4 left-0 w-full text-center">
+                                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-[0.3em]">RR Digital Display</p>
                                     </div>
                                 </div>
                             </section>
                         </div>
                     </div>
 
-                    <footer className="text-center text-slate-600 text-xs font-medium pb-10">
-                        Designed for RR International College • Project v2.5.0-Final
+                    <footer className="text-center py-6">
+                        <p className="text-slate-600 text-[10px] font-black uppercase tracking-[0.2em]">
+                            RR International College Admin Dashboard • Secure Connection
+                        </p>
                     </footer>
                 </div>
             `;
