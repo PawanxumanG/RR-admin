@@ -83,6 +83,7 @@
         const getDeviceId = () => {
             let id = localStorage.getItem('rr_device_unique_id');
             if (!id) {
+                // Persistent browser-based fingerprint
                 id = 'DEV-' + crypto.randomUUID().substring(0, 8).toUpperCase();
                 localStorage.setItem('rr_device_unique_id', id);
             }
@@ -167,7 +168,6 @@
                 setTimeout(() => setStatus(null), 6000);
             };
 
-            // Enhanced login with Device ID verification
             const handleLogin = async (e) => {
                 e.preventDefault();
                 
@@ -182,10 +182,9 @@
                     notify('success', `Access Granted: ${ownerName}`);
                 };
 
-                // Master key bypass (still device locked to the first device that uses it)
+                // Master key check (even master keys obey the 1-device lock once registered)
                 if (loginKeyInput === 'RR-2025') {
-                    performSuccessfulLogin('Pawan Ponnam');
-                    return;
+                    // Logic is handled via GitHub sync to be consistent
                 }
 
                 if (!loginKeyInput) return notify('error', 'Please enter an Access Key.');
@@ -195,7 +194,16 @@
                     const res = await fetch(url, {
                         headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' }
                     });
-                    if (!res.ok) throw new Error('Auth fetch failed. Check your GitHub config.');
+                    
+                    if (!res.ok) {
+                        // Special bypass for master key ONLY if sync fails (e.g., first setup)
+                        if (loginKeyInput === 'RR-2025') {
+                            performSuccessfulLogin('Pawan Ponnam');
+                            return;
+                        }
+                        throw new Error('Auth fetch failed. Check your GitHub config.');
+                    }
+                    
                     const data = await res.json();
                     const content = JSON.parse(safeB64Decode(data.content));
                     
@@ -207,26 +215,27 @@
                             throw new Error('This Access Key has expired.');
                         }
 
-                        // One Device Logic
+                        // One Device Logic Check
                         if (validKey.deviceId && validKey.deviceId !== currentDeviceId) {
-                            throw new Error(`DEVICE MISMATCH: This key is already registered to device ${validKey.deviceId}. Contact Pawan to reset.`);
+                            throw new Error(`SECURITY ALERT: This key is locked to device ${validKey.deviceId}. Multi-device login is strictly prohibited.`);
                         }
 
-                        // If key is not yet assigned to a device, claim it!
+                        // Automatic Device Binding
                         if (!validKey.deviceId) {
                             content.keys[keyIndex].deviceId = currentDeviceId;
-                            // Immediate update to claim the device
+                            // Update GitHub JSON to lock this key to THIS device forever
                             const putBody = {
-                                message: `Device claimed for ${validKey.owner} (${currentDeviceId})`,
+                                message: `Security Update: Device Binding for ${validKey.owner}`,
                                 content: safeB64Encode(JSON.stringify(content, null, 2)),
                                 sha: data.sha
                             };
-                            await fetch(url, {
+                            const putRes = await fetch(url, {
                                 method: 'PUT',
                                 headers: { 'Authorization': `token ${config.token}`, 'Content-Type': 'application/json' },
                                 body: JSON.stringify(putBody)
                             });
-                            notify('success', 'Device Registered Successfully.');
+                            if (!putRes.ok) throw new Error('Could not bind device to key. Try again later.');
+                            notify('success', 'Device successfully bound to access key.');
                         }
 
                         performSuccessfulLogin(validKey.owner);
@@ -378,6 +387,11 @@
                             <div className="mt-8 flex flex-col items-center gap-5">
                                 <p className="text-[9px] text-slate-700 font-bold uppercase tracking-widest">Master Admin Protected</p>
                                 
+                                <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-2xl flex flex-col items-center gap-2 max-w-xs">
+                                    <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest">Security Policy: 1 Key = 1 Device</span>
+                                    <p className="text-[7px] text-slate-500 uppercase leading-relaxed text-center font-bold">Access keys are automatically locked to your device upon first successful login.</p>
+                                </div>
+
                                 <a href="https://wa.me/919867637326" target="_blank" className="bg-[#25D366] hover:bg-[#1db954] text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-xl shadow-green-900/30 transition-all transform hover:scale-105 active:scale-95">
                                     <span>💬 HELP</span>
                                 </a>
@@ -520,11 +534,11 @@
                                                                     ${k.deviceId ? html`
                                                                         <div className="bg-orange-600/10 border border-orange-500/20 px-3 py-1.5 rounded-xl flex items-center gap-2">
                                                                             <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest">LOCKED TO: ${k.deviceId}</span>
-                                                                            <button onClick=${() => { const up = [...loginData.keys]; up[idx].deviceId = null; setLoginData({...loginData, keys: up}); }} className="text-orange-500 hover:text-white transition-all text-[10px]" title="Reset Device Lock">🔄</button>
+                                                                            <button onClick=${() => { const up = [...loginData.keys]; up[idx].deviceId = null; setLoginData({...loginData, keys: up}); }} className="text-orange-500 hover:text-white transition-all text-[10px]" title="Reset Device Lock">🔄 RESET LOCK</button>
                                                                         </div>
                                                                     ` : html`
-                                                                        <div className="px-3 py-1.5 rounded-xl border border-slate-800 flex items-center">
-                                                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">ANY DEVICE ALLOWED</span>
+                                                                        <div className="px-3 py-1.5 rounded-xl border border-dashed border-slate-700 flex items-center bg-slate-800/20">
+                                                                            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">DEVICE LOCK: NOT SET (STRICT 1-DEVICE POLICY)</span>
                                                                         </div>
                                                                     `}
                                                                 </div>
