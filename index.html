@@ -109,13 +109,26 @@
         .btn-apply:active { transform: translateY(0); }
 
         .btn-nav {
-            padding: 0.6rem 1.25rem;
+            padding: 0.75rem 1.5rem;
             border-radius: 0.8rem;
             font-size: 10px;
             font-weight: 900;
             text-transform: uppercase;
             letter-spacing: 0.1em;
             transition: all 0.2s;
+        }
+        .expires-pill {
+            background: #1a0b0d;
+            border: 1px solid #3d1417;
+            padding: 0.3rem 1rem;
+            border-radius: 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #dc2626;
+            font-weight: 900;
+            font-size: 10px;
+            letter-spacing: 0.1em;
         }
     </style>
     <script type="importmap">
@@ -143,13 +156,15 @@
 
         const MASTER_PASSWORD = "Pawan1645@";
         const BYPASS_KEY = "RR-2025";
+        const SESSION_TIME = 3600; // 1 hour in seconds
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('notice'); 
             const [isUnlocked, setIsUnlocked] = useState(false);
             const [passwordInput, setPasswordInput] = useState('');
+            const [timeLeft, setTimeLeft] = useState(SESSION_TIME);
             const [config, setConfig] = useState(() => {
-                const saved = localStorage.getItem('rr_admin_config_v10');
+                const saved = localStorage.getItem('rr_admin_config_v11');
                 return saved ? JSON.parse(saved) : { token: '', owner: 'PawanxumanG', repo: 'rr-college' };
             });
 
@@ -165,8 +180,31 @@
             const [securityPinInput, setSecurityPinInput] = useState('');
 
             useEffect(() => {
-                localStorage.setItem('rr_admin_config_v10', JSON.stringify(config));
+                localStorage.setItem('rr_admin_config_v11', JSON.stringify(config));
             }, [config]);
+
+            // Auto Logout Timer Logic
+            useEffect(() => {
+                let timer;
+                if (isUnlocked) {
+                    timer = setInterval(() => {
+                        setTimeLeft(prev => {
+                            if (prev <= 1) {
+                                handleLogout();
+                                return 0;
+                            }
+                            return prev - 1;
+                        });
+                    }, 1000);
+                }
+                return () => clearInterval(timer);
+            }, [isUnlocked]);
+
+            const formatTime = (seconds) => {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            };
 
             const notify = (message) => {
                 setStatus(message);
@@ -178,11 +216,18 @@
                 const input = passwordInput.trim();
                 if (input === MASTER_PASSWORD || input === BYPASS_KEY) {
                     setIsUnlocked(true);
+                    setTimeLeft(SESSION_TIME);
                     setPasswordInput('');
                     notify('System Unlocked: Welcome Admin');
                 } else {
                     notify('Authorization Failed');
                 }
+            };
+
+            const handleLogout = () => {
+                setIsUnlocked(false);
+                setIsSecurityUnlocked(false);
+                notify('Session Expired / Logged Out');
             };
 
             const unlockSecurityTab = (e) => {
@@ -258,16 +303,6 @@
                 }
             };
 
-            const Attribution = () => html`
-                <div className="flex flex-col items-center gap-2 mt-12 animate-slide-up">
-                    <div className="bg-[#111827] border border-orange-500/20 px-8 py-3.5 rounded-[2rem] shadow-xl flex items-center gap-4">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Made By</span>
-                        <span className="h-4 w-px bg-slate-800"></span>
-                        <span className="text-[12px] uppercase tracking-[0.2em] name-highlight">Pawan Ponnam</span>
-                    </div>
-                </div>
-            `;
-
             if (!isUnlocked) {
                 return html`
                     <div className="min-h-screen flex items-center justify-center p-6 bg-[#080a0e]">
@@ -280,37 +315,60 @@
                                 <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-5 rounded-[2rem] text-xs uppercase tracking-widest shadow-xl transition-all">ENTER DASHBOARD</button>
                                 <button type="button" onClick=${() => window.open('https://wa.me/919867637326', '_blank')} className="w-full bg-[#10b981] text-white font-black py-4 rounded-[2rem] text-[10px] uppercase tracking-widest flex items-center justify-center gap-2">💬 HELP</button>
                             </form>
-                            <${Attribution} />
+                            <div className="flex flex-col items-center gap-2 mt-12 animate-slide-up">
+                                <div className="bg-[#111827] border border-orange-500/20 px-8 py-3.5 rounded-[2rem] shadow-xl flex items-center gap-4">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Made By</span>
+                                    <span className="h-4 w-px bg-slate-800"></span>
+                                    <span className="text-[12px] uppercase tracking-[0.2em] name-highlight">Pawan Ponnam</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `;
             }
 
             return html`
-                <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-6">
+                <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-8">
                     ${status && html`<div className="sync-toast">${status}</div>`}
                     
-                    <!-- Header -->
-                    <header className="flex flex-col xl:flex-row justify-between items-center gap-8 bg-[#161b22] p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
-                        <div className="flex items-center gap-4">
-                            <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl shadow-orange-900/40">RR</div>
+                    <!-- High Fidelity Header from Screenshot -->
+                    <header className="flex flex-col items-center gap-8 bg-[#111827] p-10 rounded-[2.5rem] border border-slate-800 shadow-2xl text-center">
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="bg-[#f97316] w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl text-white shadow-xl shadow-orange-900/40">RR</div>
                             <div>
-                                <h1 className="text-lg font-black text-white tracking-tight leading-none">College Control Center</h1>
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-1.5">Management Suite v2.2</p>
+                                <h1 className="text-xl font-bold text-white tracking-tight">College Control Center</h1>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-1">MANAGEMENT SUITE V4.0</p>
                             </div>
                         </div>
                         
-                        <div className="bg-black/40 p-1.5 rounded-2xl flex flex-wrap justify-center gap-1 border border-slate-800/50">
+                        <!-- Navigation -->
+                        <div className="bg-black/60 p-2 rounded-2xl flex items-center gap-1 border border-slate-800/80">
                             ${['notice', 'popup', 'events', 'security'].map(tab => html`
-                                <button key=${tab} onClick=${() => { setActiveTab(tab); if(tab !== 'security') setIsSecurityUnlocked(false); }} className=${`btn-nav ${activeTab === tab ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
-                                    ${tab === 'notice' ? 'Notices' : tab === 'popup' ? 'Popups' : tab === 'events' ? 'Eventss' : '🔒 Security'}
+                                <button key=${tab} onClick=${() => { setActiveTab(tab); if(tab !== 'security') setIsSecurityUnlocked(false); }} className=${`btn-nav ${activeTab === tab ? 'bg-[#f97316] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+                                    ${tab === 'security' ? '🔒 Security' : tab.toUpperCase()}
                                 </button>
                             `)}
                         </div>
-                        
-                        <div className="flex items-center gap-3">
-                            <button onClick=${() => handleSync()} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-[10px] font-black uppercase text-white shadow-lg flex items-center gap-2 transition-all">
-                                ${loading ? html`<div className="loader"></div>` : html`🔄 Sync Live`}
+
+                        <!-- Session Timer -->
+                        <div className="expires-pill">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
+                            <span>EXPIRES: ${formatTime(timeLeft)}</span>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div className="flex items-center gap-4">
+                            <button onClick=${handleLogout} className="px-10 py-3.5 bg-[#1f2937] hover:bg-slate-700 rounded-2xl text-[10px] font-black uppercase text-slate-300 shadow-xl transition-all">LOGOUT</button>
+                            <button onClick=${() => handleSync()} className="px-10 py-3.5 bg-[#3b82f6] hover:bg-blue-500 rounded-2xl text-[10px] font-black uppercase text-white shadow-lg flex items-center gap-2 transition-all">
+                                ${loading ? html`<div className="loader"></div>` : html`🔄 SYNC LIVE`}
+                            </button>
+                        </div>
+
+                        <!-- Attribution & Help -->
+                        <div className="flex flex-col items-center gap-3">
+                            <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.4em]">PAWAN PONNAM</span>
+                            <button onClick=${() => window.open('https://wa.me/919867637326', '_blank')} className="bg-[#10b981] hover:bg-green-500 text-white px-8 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-xl transition-all active:scale-95">
+                                💬 HELP
                             </button>
                         </div>
                     </header>
@@ -398,7 +456,6 @@
                                                 </div>
                                             ` : html`
                                                 <div className="space-y-12 animate-slide-up">
-                                                    <!-- Config Panel Integrated in Security -->
                                                     <div className="space-y-8 pb-12 border-b border-slate-800/50">
                                                         <div className="flex justify-center mb-6">
                                                             <button onClick=${() => setIsSecurityUnlocked(false)} className="px-10 py-3.5 bg-white text-black rounded-[2rem] font-black text-[10px] uppercase shadow-xl hover:bg-slate-200 transition-all">✕ Close Settings</button>
@@ -499,7 +556,13 @@
                             <span className="text-[9px] font-black uppercase tracking-[1.2em] text-slate-700">Official Secure Gateway</span>
                             <div className="h-px w-24 bg-slate-800"></div>
                         </div>
-                        <${Attribution} />
+                        <div className="flex flex-col items-center gap-2 mt-4">
+                            <div className="bg-[#111827] border border-orange-500/20 px-8 py-3.5 rounded-[2rem] shadow-xl flex items-center gap-4">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Made By</span>
+                                <span className="h-4 w-px bg-slate-800"></span>
+                                <span className="text-[12px] uppercase tracking-[0.2em] name-highlight">Pawan Ponnam</span>
+                            </div>
+                        </div>
                         <p className="text-[10px] font-bold text-slate-900 uppercase tracking-[0.6em] opacity-40">RR College Management Dashboard v4.2</p>
                     </footer>
                 </div>
