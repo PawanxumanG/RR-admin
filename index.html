@@ -160,11 +160,25 @@
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('notice'); 
-            const [isUnlocked, setIsUnlocked] = useState(() => localStorage.getItem('rr_admin_unlocked') === 'true');
-            const [passwordInput, setPasswordInput] = useState('');
-            const [timeLeft, setTimeLeft] = useState(SESSION_TIME);
+            
+            // Helper to get current remaining time
+            const getRemainingSeconds = () => {
+                const expiry = localStorage.getItem('rr_session_expiry');
+                if (!expiry) return 0;
+                const remaining = Math.floor((parseInt(expiry) - Date.now()) / 1000);
+                return Math.max(0, remaining);
+            };
+
+            // Deriving initial unlocked state strictly from expiry timestamp
+            const [isUnlocked, setIsUnlocked] = useState(() => {
+                const unlockedFlag = localStorage.getItem('rr_admin_unlocked') === 'true';
+                return unlockedFlag && getRemainingSeconds() > 0;
+            });
+
+            const [timeLeft, setTimeLeft] = useState(getRemainingSeconds());
+
             const [config, setConfig] = useState(() => {
-                const saved = localStorage.getItem('rr_admin_config_v12');
+                const saved = localStorage.getItem('rr_admin_config_v14');
                 return saved ? JSON.parse(saved) : { token: '', owner: 'PawanxumanG', repo: 'rr-college' };
             });
 
@@ -178,28 +192,29 @@
             const [status, setStatus] = useState(null);
             const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(false);
             const [securityPinInput, setSecurityPinInput] = useState('');
+            const [passwordInput, setPasswordInput] = useState('');
 
-            // Save config and login state
+            // LocalStorage persistence for config
             useEffect(() => {
-                localStorage.setItem('rr_admin_config_v12', JSON.stringify(config));
+                localStorage.setItem('rr_admin_config_v14', JSON.stringify(config));
             }, [config]);
 
+            // Sync unlocked status to LocalStorage for persistence
             useEffect(() => {
                 localStorage.setItem('rr_admin_unlocked', isUnlocked);
             }, [isUnlocked]);
 
-            // Auto Logout Timer Logic
+            // Persistent Session Timer Logic
             useEffect(() => {
                 let timer;
                 if (isUnlocked) {
                     timer = setInterval(() => {
-                        setTimeLeft(prev => {
-                            if (prev <= 1) {
-                                handleLogout();
-                                return 0;
-                            }
-                            return prev - 1;
-                        });
+                        const remaining = getRemainingSeconds();
+                        if (remaining <= 0) {
+                            handleLogout();
+                        } else {
+                            setTimeLeft(remaining);
+                        }
                     }, 1000);
                 }
                 return () => clearInterval(timer);
@@ -220,6 +235,8 @@
                 e.preventDefault();
                 const input = passwordInput.trim();
                 if (input === MASTER_PASSWORD || input === BYPASS_KEY) {
+                    const expiryTimestamp = Date.now() + (SESSION_TIME * 1000);
+                    localStorage.setItem('rr_session_expiry', expiryTimestamp.toString());
                     setIsUnlocked(true);
                     setTimeLeft(SESSION_TIME);
                     setPasswordInput('');
@@ -232,7 +249,10 @@
             const handleLogout = () => {
                 setIsUnlocked(false);
                 setIsSecurityUnlocked(false);
-                notify('Session Expired / Logged Out');
+                localStorage.removeItem('rr_admin_unlocked');
+                localStorage.removeItem('rr_session_expiry');
+                setTimeLeft(0);
+                notify('Session Ended');
             };
 
             const unlockSecurityTab = (e) => {
@@ -257,7 +277,7 @@
                 if (activeTab === 'notice') setNoticeData(prev => ({ ...prev, show: !prev.show }));
                 else if (activeTab === 'popup') setAnnouncementData(prev => ({ ...prev, show: !prev.show }));
                 else if (activeTab === 'events') setEventsData(prev => ({ ...prev, show: !prev.show }));
-                notify(`${activeTab.toUpperCase()} visibility updated locally.`);
+                notify(`${activeTab.toUpperCase()} visibility toggled.`);
             };
 
             const handleSync = async (forcedTab = null) => {
@@ -283,7 +303,7 @@
                     else if (target === 'events') { setEventsData(content); setShas(p => ({...p, events: data.sha})); }
                     else if (target === 'security') { setLoginData(content); setShas(p => ({...p, security: data.sha})); }
                     
-                    notify(`Live Sync Complete: ${path}`);
+                    notify(`Sync Successful: ${path}`);
                 } catch (err) {
                     notify(`Sync Error: ${err.message}`);
                 } finally {
@@ -293,7 +313,7 @@
 
             const handlePublish = async () => {
                 const currentSha = shas[activeTab];
-                if (!config.token || !currentSha) return notify('Sync data first');
+                if (!config.token || !currentSha) return notify('Sync first to obtain SHA');
                 setLoading(true);
                 const mapping = { notice: 'notice.json', popup: 'announcement.json', events: 'events.json', security: 'login.json' };
                 const path = mapping[activeTab];
@@ -311,10 +331,10 @@
                         headers: { 'Authorization': `token ${config.token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify(body)
                     });
-                    if (!res.ok) throw new Error('Update propagation failed');
+                    if (!res.ok) throw new Error('Failed to push changes');
                     const resData = await res.json();
                     setShas(prev => ({ ...prev, [activeTab]: resData.content.sha }));
-                    notify(`${path} update is now live!`);
+                    notify(`${path} is now LIVE!`);
                 } catch (err) {
                     notify(err.message);
                 } finally {
@@ -350,7 +370,6 @@
                 <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-8">
                     ${status && html`<div className="sync-toast">${status}</div>`}
                     
-                    <!-- High Fidelity Header from Screenshot -->
                     <header className="flex flex-col items-center gap-8 bg-[#111827] p-10 rounded-[2.5rem] border border-slate-800 shadow-2xl text-center">
                         <div className="flex flex-col items-center gap-2">
                             <div className="bg-[#f97316] w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl text-white shadow-xl shadow-orange-900/40">RR</div>
@@ -360,7 +379,6 @@
                             </div>
                         </div>
                         
-                        <!-- Navigation -->
                         <div className="bg-black/60 p-2 rounded-2xl flex items-center gap-1 border border-slate-800/80">
                             ${['notice', 'popup', 'events', 'security'].map(tab => html`
                                 <button key=${tab} onClick=${() => { setActiveTab(tab); if(tab !== 'security') setIsSecurityUnlocked(false); }} className=${`btn-nav ${activeTab === tab ? 'bg-[#f97316] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
@@ -369,13 +387,11 @@
                             `)}
                         </div>
 
-                        <!-- Session Timer -->
                         <div className="expires-pill">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
                             <span>EXPIRES: ${formatTime(timeLeft)}</span>
                         </div>
 
-                        <!-- Action Buttons -->
                         <div className="flex items-center gap-4">
                             <button onClick=${handleLogout} className="px-10 py-3.5 bg-[#1f2937] hover:bg-slate-700 rounded-2xl text-[10px] font-black uppercase text-slate-300 shadow-xl transition-all">LOGOUT</button>
                             <button onClick=${() => handleSync()} className="px-10 py-3.5 bg-[#3b82f6] hover:bg-blue-500 rounded-2xl text-[10px] font-black uppercase text-white shadow-lg flex items-center gap-2 transition-all">
@@ -383,7 +399,6 @@
                             </button>
                         </div>
 
-                        <!-- Attribution & Help -->
                         <div className="flex flex-col items-center gap-3">
                             <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.4em]">PAWAN PONNAM</span>
                             <button onClick=${() => window.open('https://wa.me/919867637326', '_blank')} className="bg-[#10b981] hover:bg-green-500 text-white px-8 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-xl transition-all active:scale-95">
@@ -393,7 +408,6 @@
                     </header>
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
-                        <!-- Main Content -->
                         <main className="lg:col-span-8 animate-slide-up">
                             <section className="glass-panel p-8 md:p-12 rounded-[3.5rem] shadow-2xl min-h-[600px] flex flex-col">
                                 <div className="flex flex-col mb-10">
@@ -475,7 +489,6 @@
                                                 </div>
                                             ` : html`
                                                 <div className="space-y-12 animate-slide-up">
-                                                    <!-- Config Panel -->
                                                     <div className="space-y-8 pb-12 border-b border-slate-800/50">
                                                         <div className="flex justify-center mb-6">
                                                             <button onClick=${() => setIsSecurityUnlocked(false)} className="px-10 py-3.5 bg-white text-black rounded-[2rem] font-black text-[10px] uppercase shadow-xl hover:bg-slate-200 transition-all">✕ Close Settings</button>
@@ -524,7 +537,6 @@
                             </section>
                         </main>
 
-                        <!-- Preview Column -->
                         <aside className="lg:col-span-4 animate-slide-up">
                             <section className="glass-panel p-8 rounded-[3.5rem] sticky top-8 flex flex-col h-[calc(100vh-10rem)] overflow-hidden">
                                 <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-10 flex items-center gap-3">
