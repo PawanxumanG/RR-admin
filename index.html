@@ -160,11 +160,11 @@
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('notice'); 
-            const [isUnlocked, setIsUnlocked] = useState(false);
+            const [isUnlocked, setIsUnlocked] = useState(() => localStorage.getItem('rr_admin_unlocked') === 'true');
             const [passwordInput, setPasswordInput] = useState('');
             const [timeLeft, setTimeLeft] = useState(SESSION_TIME);
             const [config, setConfig] = useState(() => {
-                const saved = localStorage.getItem('rr_admin_config_v11');
+                const saved = localStorage.getItem('rr_admin_config_v12');
                 return saved ? JSON.parse(saved) : { token: '', owner: 'PawanxumanG', repo: 'rr-college' };
             });
 
@@ -179,9 +179,14 @@
             const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(false);
             const [securityPinInput, setSecurityPinInput] = useState('');
 
+            // Save config and login state
             useEffect(() => {
-                localStorage.setItem('rr_admin_config_v11', JSON.stringify(config));
+                localStorage.setItem('rr_admin_config_v12', JSON.stringify(config));
             }, [config]);
+
+            useEffect(() => {
+                localStorage.setItem('rr_admin_unlocked', isUnlocked);
+            }, [isUnlocked]);
 
             // Auto Logout Timer Logic
             useEffect(() => {
@@ -239,6 +244,20 @@
                 } else {
                     notify('Access Denied');
                 }
+            };
+
+            const getPublicStatus = () => {
+                if (activeTab === 'notice') return noticeData.show;
+                if (activeTab === 'popup') return announcementData.show;
+                if (activeTab === 'events') return eventsData.show;
+                return true;
+            };
+
+            const togglePublicStatus = () => {
+                if (activeTab === 'notice') setNoticeData(prev => ({ ...prev, show: !prev.show }));
+                else if (activeTab === 'popup') setAnnouncementData(prev => ({ ...prev, show: !prev.show }));
+                else if (activeTab === 'events') setEventsData(prev => ({ ...prev, show: !prev.show }));
+                notify(`${activeTab.toUpperCase()} visibility updated locally.`);
             };
 
             const handleSync = async (forcedTab = null) => {
@@ -307,7 +326,7 @@
                 return html`
                     <div className="min-h-screen flex items-center justify-center p-6 bg-[#080a0e]">
                         <div className="glass-panel w-full max-w-md p-12 rounded-[3.5rem] text-center border-orange-500/10 shadow-2xl animate-slide-up">
-                            <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-16 h-16 rounded-2xl flex items-center justify-center font-black text-3xl text-white mx-auto mb-10 shadow-2xl shadow-orange-900/40">RR</div>
+                            <div className="bg-[#f97316] w-16 h-16 rounded-2xl flex items-center justify-center font-black text-3xl text-white mx-auto mb-10 shadow-2xl shadow-orange-900/40">RR</div>
                             <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-2">College Control Center</h2>
                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] mb-14">System Secure Gateway</p>
                             <form onSubmit=${handleUnlock} className="space-y-6">
@@ -384,8 +403,8 @@
                                             ${activeTab === 'notice' ? 'Notice Board' : activeTab === 'popup' ? 'Announcement Pop-up' : activeTab === 'events' ? 'Events Manager' : 'Security Board'}
                                         </h2>
                                         ${activeTab !== 'security' && html`
-                                            <button className="px-5 py-2.5 rounded-full text-[10px] font-black bg-green-600/10 border-2 border-green-500 text-green-400">
-                                                ● PUBLIC STATUS
+                                            <button onClick=${togglePublicStatus} className=${`px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all border-2 ${getPublicStatus() ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-slate-800/40 border-slate-700 text-slate-500'}`}>
+                                                ${getPublicStatus() ? '● PUBLIC STATUS' : '○ HIDDEN STATUS'}
                                             </button>
                                         `}
                                     </div>
@@ -456,6 +475,7 @@
                                                 </div>
                                             ` : html`
                                                 <div className="space-y-12 animate-slide-up">
+                                                    <!-- Config Panel -->
                                                     <div className="space-y-8 pb-12 border-b border-slate-800/50">
                                                         <div className="flex justify-center mb-6">
                                                             <button onClick=${() => setIsSecurityUnlocked(false)} className="px-10 py-3.5 bg-white text-black rounded-[2rem] font-black text-[10px] uppercase shadow-xl hover:bg-slate-200 transition-all">✕ Close Settings</button>
@@ -513,7 +533,7 @@
                                 
                                 <div className="flex-1 bg-[#050505] rounded-[2.5rem] p-8 overflow-y-auto custom-scrollbar shadow-inner flex flex-col items-center justify-center gap-8 text-center">
                                     ${activeTab === 'notice' && html`
-                                        <div className="w-full bg-[#161a22] p-8 rounded-[2.5rem] border border-slate-800 relative overflow-hidden shadow-2xl animate-slide-up text-left">
+                                        <div className="w-full bg-[#161a22] p-8 rounded-[2.5rem] border border-slate-800 relative overflow-hidden shadow-2xl animate-slide-up text-left ${!noticeData.show ? 'opacity-30 grayscale' : ''}">
                                             <div className="absolute top-0 left-0 w-full h-1.5 bg-orange-600"></div>
                                             <h4 className="text-orange-500 font-black text-xl uppercase mb-6">${noticeData.title || '📢 IMPORTANT NOTICE'}</h4>
                                             <div className="space-y-4">${noticeData.message.map((l, i) => html`<p key=${i} className="text-slate-400 text-[11px] font-medium leading-relaxed">${l}</p>`)}</div>
@@ -526,7 +546,7 @@
                                         </div>
                                     `}
                                     ${activeTab === 'popup' && html`
-                                        <div className="w-full max-w-[320px] bg-[#1a1f2e] p-10 rounded-[3.5rem] text-center shadow-[0_0_80px_rgba(249,115,22,0.25)] animate-slide-up relative border border-slate-800">
+                                        <div className="w-full max-w-[320px] bg-[#1a1f2e] p-10 rounded-[3.5rem] text-center shadow-[0_0_80px_rgba(249,115,22,0.25)] animate-slide-up relative border border-slate-800 ${!announcementData.show ? 'opacity-30 grayscale' : ''}">
                                             <div className="text-4xl mb-6">📢</div>
                                             <h4 className="text-white font-black text-2xl uppercase mb-5 tracking-tighter">${announcementData.title || 'HELLO EVERYONE!! 😃'}</h4>
                                             <p className="text-slate-400 text-[11px] font-medium mb-12 leading-relaxed">${announcementData.message || 'Announcement content will appear here.'}</p>
@@ -534,7 +554,7 @@
                                         </div>
                                     `}
                                     ${activeTab === 'events' && (eventsData.events.length > 0 ? eventsData.events.map((ev, i) => html`
-                                        <div key=${i} className="w-full p-10 rounded-[3rem] text-white shadow-2xl animate-slide-up text-left" style=${{ background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(', ') || '#161a22, #0d1117'})`, boxShadow: `0 20px 60px ${ev.theme?.glow || 'transparent'}` }}>
+                                        <div key=${i} className="w-full p-10 rounded-[3rem] text-white shadow-2xl animate-slide-up text-left ${!eventsData.show ? 'opacity-30 grayscale' : ''}" style=${{ background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(', ') || '#161a22, #0d1117'})`, boxShadow: `0 20px 60px ${ev.theme?.glow || 'transparent'}` }}>
                                             <h4 className="text-2xl font-black uppercase mb-6 leading-tight">${ev.title || 'EVENT'}</h4>
                                             <div className="space-y-3">${ev.content.map((l, ii) => html`<p key=${ii} className="text-[11px] font-medium opacity-90 leading-relaxed">• ${l}</p>`)}</div>
                                         </div>
