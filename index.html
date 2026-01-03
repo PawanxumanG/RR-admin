@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RR College Admin - Live Dashboard</title>
+    <title>RR College Admin - Management Suite</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
@@ -18,25 +18,65 @@
             background: rgba(22, 27, 34, 0.8);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(48, 54, 61, 0.6);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
         }
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 6px;
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+        
+        .name-highlight {
+            color: #f97316 !important;
+            text-shadow: 0 0 20px rgba(249, 115, 22, 0.8);
+            font-weight: 900 !important;
         }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
+        
+        .sync-toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background: #111827;
+            border: 2px solid #10b981;
+            box-shadow: 0 0 60px rgba(16, 185, 129, 0.4);
+            border-radius: 2rem;
+            padding: 1.5rem 3rem;
+            color: #10b981;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            animation: toastIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            font-size: 0.8rem;
+            white-space: nowrap;
         }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #30363d;
-            border-radius: 10px;
+        @keyframes toastIn {
+            0% { opacity: 0; transform: translate(-50%, -40%) scale(0.9); }
+            15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            85% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -60%) scale(1.1); }
         }
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        
+        input, textarea, select {
+            background-color: #050505 !important;
+            border: 1px solid #1f2937 !important;
+            border-radius: 1.5rem !important;
+            padding: 1.25rem 1.5rem !important;
+            color: white !important;
+            outline: none !important;
+            transition: border-color 0.2s;
         }
-        .animate-slide-up {
-            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        input:focus, textarea:focus { border-color: #f97316 !important; }
+        
+        .label-text {
+            font-size: 10px;
+            font-weight: 900;
+            color: #4b5563;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.75rem;
+            display: block;
         }
+
         .loader {
             border: 2px solid rgba(255, 255, 255, 0.1);
             border-top: 2px solid #f97316;
@@ -45,51 +85,7 @@
             height: 18px;
             animation: spin 0.8s linear infinite;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .name-highlight {
-            color: #f97316 !important;
-            text-shadow: 0 0 20px rgba(249, 115, 22, 0.8);
-            font-weight: 900 !important;
-        }
-        .attribution-pill {
-            background: #161b22;
-            border: 1px solid rgba(249, 115, 22, 0.3);
-            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .attribution-pill:hover {
-            border-color: #f97316;
-            transform: translateY(-2px);
-        }
-        .sync-toast {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 999;
-            background: #161b22;
-            border: 2px solid #10b981;
-            box-shadow: 0 0 60px rgba(16, 185, 129, 0.4);
-            border-radius: 2.5rem;
-            padding: 1.5rem 3rem;
-            color: #10b981;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            pointer-events: none;
-            animation: toastIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            font-size: 0.75rem;
-            white-space: nowrap;
-        }
-        @keyframes toastIn {
-            0% { opacity: 0; transform: translate(-50%, -40%) scale(0.9); }
-            20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-            100% { opacity: 0; transform: translate(-50%, -60%) scale(1.1); }
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
     <script type="importmap">
     {
@@ -105,7 +101,7 @@
     <div id="root"></div>
 
     <script type="module">
-        import React, { useState, useEffect, useCallback } from 'react';
+        import React, { useState, useEffect } from 'react';
         import ReactDOM from 'react-dom/client';
         import htm from 'htm';
 
@@ -121,9 +117,8 @@
             const [activeTab, setActiveTab] = useState('notice'); 
             const [isUnlocked, setIsUnlocked] = useState(false);
             const [passwordInput, setPasswordInput] = useState('');
-            
             const [config, setConfig] = useState(() => {
-                const saved = localStorage.getItem('rr_admin_config_v6');
+                const saved = localStorage.getItem('rr_admin_config_v7');
                 return saved ? JSON.parse(saved) : { token: '', owner: 'PawanxumanG', repo: 'rr-college' };
             });
 
@@ -140,11 +135,11 @@
             const [securityPinInput, setSecurityPinInput] = useState('');
 
             useEffect(() => {
-                localStorage.setItem('rr_admin_config_v6', JSON.stringify(config));
+                localStorage.setItem('rr_admin_config_v7', JSON.stringify(config));
             }, [config]);
 
-            const notify = (type, message) => {
-                setStatus({ type, message });
+            const notify = (message) => {
+                setStatus(message);
                 setTimeout(() => setStatus(null), 3000);
             };
 
@@ -154,27 +149,16 @@
                 if (input === MASTER_PASSWORD || input === BYPASS_KEY) {
                     setIsUnlocked(true);
                     setPasswordInput('');
-                    notify('success', 'SYSTUMM UNLOCKED: WELCOME ADMIN');
+                    notify('Welcome Admin');
                 } else {
-                    notify('error', 'AUTHORIZATION FAILED');
-                }
-            };
-
-            const unlockSecurityTab = (e) => {
-                e.preventDefault();
-                if (securityPinInput === MASTER_PASSWORD) {
-                    setIsSecurityUnlocked(true);
-                    setSecurityPinInput('');
-                    handleSync('security');
-                } else {
-                    notify('error', 'ACCESS DENIED');
+                    notify('Invalid Access Key');
                 }
             };
 
             const handleSync = async (forcedTab = null) => {
                 const target = forcedTab || activeTab;
                 if (!config.token || !config.owner || !config.repo) {
-                    notify('error', 'CONFIG MISSING');
+                    notify('Config required');
                     return;
                 }
                 setLoading(true);
@@ -185,7 +169,7 @@
                     const res = await fetch(url, {
                         headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' }
                     });
-                    if (!res.ok) throw new Error(`FETCH FAILED: ${path}`);
+                    if (!res.ok) throw new Error(`Fetch failed`);
                     const data = await res.json();
                     const content = JSON.parse(safeB64Decode(data.content));
                     
@@ -194,9 +178,9 @@
                     else if (target === 'events') { setEventsData(content); setShas(p => ({...p, events: data.sha})); }
                     else if (target === 'security') { setLoginData(content); setShas(p => ({...p, security: data.sha})); }
                     
-                    notify('success', `SYNCED ${path.toUpperCase()} FROM GITHUB`);
+                    notify(`Synced ${path} from Github.`);
                 } catch (err) {
-                    notify('error', err.message);
+                    notify(`Sync failed: ${err.message}`);
                 } finally {
                     setLoading(false);
                 }
@@ -204,141 +188,93 @@
 
             const handlePublish = async () => {
                 const currentSha = shas[activeTab];
-                if (!config.token || !currentSha) {
-                    return notify('error', 'SYNC DATA FIRST');
-                }
+                if (!config.token || !currentSha) return notify('Sync data first');
                 setLoading(true);
                 const mapping = { notice: 'notice.json', popup: 'announcement.json', events: 'events.json', security: 'login.json' };
                 const path = mapping[activeTab];
-                
-                let dataToUpload;
-                if (activeTab === 'notice') dataToUpload = noticeData;
-                else if (activeTab === 'popup') dataToUpload = { ...announcementData, id: 'ann-' + Date.now() };
-                else if (activeTab === 'events') dataToUpload = eventsData;
-                else if (activeTab === 'security') dataToUpload = loginData;
+                const dataToUpload = activeTab === 'notice' ? noticeData : activeTab === 'popup' ? announcementData : activeTab === 'events' ? eventsData : loginData;
 
                 try {
                     const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`;
                     const body = {
-                        message: `Live Update: ${path} by Pawan Ponnam`,
+                        message: `Live Update: ${path} by Pawan`,
                         content: safeB64Encode(JSON.stringify(dataToUpload, null, 2)),
                         sha: currentSha
                     };
                     const res = await fetch(url, {
                         method: 'PUT',
-                        headers: { 
-                            'Authorization': `token ${config.token}`, 
-                            'Accept': 'application/vnd.github.v3+json',
-                            'Content-Type': 'application/json' 
-                        },
+                        headers: { 'Authorization': `token ${config.token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify(body)
                     });
-                    if (!res.ok) throw new Error('PUBLISH FAILED');
+                    if (!res.ok) throw new Error('Publish failed');
                     const resData = await res.json();
                     setShas(prev => ({ ...prev, [activeTab]: resData.content.sha }));
-                    notify('success', `${path.toUpperCase()} IS NOW LIVE!`);
+                    notify(`${path} is now live!`);
                 } catch (err) {
-                    notify('error', err.message);
+                    notify(err.message);
                 } finally {
                     setLoading(false);
                 }
             };
 
-            // Helper Functions to avoid complex nested logic in templates
-            const updateKeyField = (idx, field, val) => {
-                const newKeys = [...loginData.keys];
-                newKeys[idx] = { ...newKeys[idx], [field]: val };
-                setLoginData({ ...loginData, keys: newKeys });
-            };
-
-            const removeKey = (idx) => {
-                const remaining = loginData.keys.filter((_, i) => i !== idx);
-                setLoginData({ keys: remaining });
-            };
-
-            const addNewKey = () => {
-                const newKey = { id: Date.now(), key: 'RR-' + Math.random().toString(36).substring(2,8).toUpperCase(), owner: 'New Admin', expiry: '01/01/2026', isActive: true, deviceLock: false };
-                setLoginData({ keys: [newKey, ...loginData.keys] });
-            };
-
-            const addNoticeItem = () => {
-                setNoticeData(p => ({
-                    ...p,
-                    updates: { ...p.updates, items: [...(p.updates?.items || []), ''] }
-                }));
-            };
-
-            const removeNoticeItem = (idx) => {
-                const items = noticeData.updates.items.filter((_, i) => i !== idx);
-                setNoticeData(p => ({ ...p, updates: { ...p.updates, items } }));
-            };
-
-            const updateNoticeItem = (idx, val) => {
-                const items = [...noticeData.updates.items];
-                items[idx] = val;
-                setNoticeData(p => ({ ...p, updates: { ...p.updates, items } }));
-            };
-
             const Attribution = () => html`
-                <div className="flex flex-col items-center gap-3 animate-slide-up">
-                    <div className="attribution-pill flex items-center gap-4 px-8 py-4 rounded-[2rem]">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">MADE BY</span>
-                        <span className="h-5 w-px bg-slate-800"></span>
-                        <span className="text-[13px] uppercase tracking-[0.2em] name-highlight">PAWAN PONNAM</span>
+                <div className="flex flex-col items-center gap-3 mt-4">
+                    <div className="bg-[#161b22] border border-orange-500/30 flex items-center gap-4 px-8 py-3 rounded-[2rem] shadow-xl">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pawan Ponnam</span>
+                        <a href="https://wa.me/919867637326" target="_blank" className="bg-[#10b981] text-white px-3 py-1 rounded-lg text-[9px] font-black flex items-center gap-1 uppercase">💬 Help</a>
                     </div>
                 </div>
             `;
 
-            if (!isUnlocked && !showSettings) {
+            if (!isUnlocked) {
                 return html`
                     <div className="min-h-screen flex items-center justify-center p-6 bg-[#080a0e]">
-                        <div className="glass-panel w-full max-w-md p-10 rounded-[3rem] animate-slide-up text-center border-orange-500/20 shadow-2xl">
-                            <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl text-white mx-auto shadow-2xl mb-8">RR</div>
+                        <div className="glass-panel w-full max-w-md p-10 rounded-[3rem] text-center border-orange-500/20 shadow-2xl">
+                            <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl text-white mx-auto mb-8 shadow-2xl">RR</div>
                             <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-2">College Control Center</h2>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] mb-12">System Secure Gateway</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] mb-12">Secure Gateway</p>
                             <form onSubmit=${handleUnlock} className="space-y-4 mb-10">
-                                <input type="text" value=${passwordInput} onChange=${e => setPasswordInput(e.target.value)} className="w-full bg-black/60 border border-slate-800 p-5 rounded-3xl text-center font-mono tracking-widest text-lg outline-none focus:border-orange-500 transition-all text-white" placeholder="ENTER ACCESS KEY"/>
-                                <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-5 rounded-3xl text-xs uppercase tracking-widest shadow-xl transition-all">
-                                    ENTER DASHBOARD
-                                </button>
+                                <input type="text" value=${passwordInput} onChange=${e => setPasswordInput(e.target.value)} className="w-full text-center font-mono tracking-widest text-lg" placeholder="ACCESS KEY"/>
+                                <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-5 rounded-[2rem] text-xs uppercase tracking-widest transition-all">ENTER DASHBOARD</button>
                             </form>
-                            <div className="space-y-12">
-                                <a href="https://wa.me/919867637326" target="_blank" className="bg-[#25D366] text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 justify-center mx-auto shadow-xl hover:scale-105 transition-transform active:scale-95">
-                                    <span>💬 HELP</span>
-                                </a>
-                                <${Attribution} />
-                            </div>
+                            <${Attribution} />
                         </div>
                     </div>
                 `;
             }
 
-            // Tab View Components
-            const NoticeEditor = () => html`
-                <div className="space-y-10 animate-slide-up flex-1">
+            const NoticeView = () => html`
+                <div className="space-y-8">
                     <div>
-                        <label className="text-[11px] font-black text-slate-500 uppercase block mb-3 pl-1">Primary Headline</label>
-                        <input value=${noticeData.title} onChange=${e => setNoticeData(p => ({...p, title: e.target.value}))} className="w-full bg-[#0d1117] border border-slate-800 p-6 rounded-[2rem] text-xl font-bold text-white outline-none focus:border-orange-500 transition-all" placeholder="Headline..."/>
+                        <span className="label-text">Primary Headline</span>
+                        <input value=${noticeData.title} onChange=${e => setNoticeData({...noticeData, title: e.target.value})} className="w-full" placeholder="Headline..."/>
                     </div>
                     <div>
-                        <label className="text-[11px] font-black text-slate-500 uppercase block mb-3 pl-1">Body Content (Full Text)</label>
-                        <textarea rows="8" value=${noticeData.message.join('\n')} onChange=${e => setNoticeData(p => ({...p, message: e.target.value.split('\n')}))} className="w-full bg-[#0d1117] border border-slate-800 p-6 rounded-[2rem] text-sm text-slate-300 outline-none focus:border-orange-500 resize-none leading-relaxed transition-all" placeholder="Body text..."/>
+                        <span className="label-text">Body Content (Full Text)</span>
+                        <textarea rows="6" value=${noticeData.message.join('\n')} onChange=${e => setNoticeData({...noticeData, message: e.target.value.split('\n')})} className="w-full resize-none" placeholder="Body text..."/>
                     </div>
-                    <div className="pt-10 border-t border-slate-800/60 space-y-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-slate-800">
                         <div>
-                            <label className="text-[10px] font-black text-slate-600 uppercase mb-3 block tracking-widest pl-1">Version Tag</label>
-                            <input value=${noticeData.updates?.version || ''} onChange=${e => setNoticeData(p => ({...p, updates: { ...p.updates, version: e.target.value }}))} className="w-full bg-black/40 border border-slate-800 p-5 rounded-2xl text-sm text-orange-500 font-black outline-none" placeholder="e.g. New App Updates v2.1"/>
+                            <span className="label-text">Version Tag</span>
+                            <input value=${noticeData.updates?.version || ''} onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, version: e.target.value}})} className="w-full text-orange-500 font-bold" placeholder="e.g. App Update v2.1"/>
                         </div>
                         <div>
-                            <div className="flex justify-between items-center mb-5 pl-1">
-                                <label className="text-[10px] font-black text-slate-600 uppercase block tracking-widest">Changelog Items</label>
-                                <button onClick=${addNoticeItem} className="text-[9px] font-black uppercase text-orange-500 bg-orange-500/10 px-4 py-2 rounded-xl hover:bg-orange-500/20 transition-all">+ Add New Line</button>
+                            <div className="flex justify-between items-center mb-3">
+                                <span className="label-text !mb-0">Changelog Items</span>
+                                <button onClick=${() => setNoticeData({...noticeData, updates: {...noticeData.updates, items: [...(noticeData.updates?.items || []), '']}})} className="text-[9px] font-black text-orange-500 uppercase bg-orange-500/10 px-3 py-1.5 rounded-xl hover:bg-orange-500/20">+ Add New Line</button>
                             </div>
-                            <div className="space-y-4">
-                                ${(noticeData.updates?.items || []).map((item, idx) => html`
-                                    <div key=${idx} className="flex gap-4 animate-slide-up group">
-                                        <input value=${item} onChange=${e => updateNoticeItem(idx, e.target.value)} className="flex-1 bg-black/30 border border-slate-800/50 p-4 rounded-2xl text-xs text-slate-400 focus:text-white outline-none focus:border-orange-500/30 transition-all"/>
-                                        <button onClick=${() => removeNoticeItem(idx)} className="w-12 h-12 bg-red-900/10 text-red-500 rounded-2xl flex items-center justify-center opacity-40 hover:opacity-100 transition-all">✕</button>
+                            <div className="space-y-3">
+                                ${(noticeData.updates?.items || []).length === 0 ? html`<div className="text-[10px] text-slate-600 font-bold uppercase py-10 text-center border border-dashed border-slate-800 rounded-2xl">No Changelog Items Added</div>` : (noticeData.updates.items).map((item, idx) => html`
+                                    <div key=${idx} className="flex gap-3">
+                                        <input value=${item} onChange=${e => {
+                                            const items = [...noticeData.updates.items];
+                                            items[idx] = e.target.value;
+                                            setNoticeData({...noticeData, updates: {...noticeData.updates, items}});
+                                        }} className="flex-1 !p-3 !text-xs !rounded-xl" />
+                                        <button onClick=${() => {
+                                            const items = noticeData.updates.items.filter((_, i) => i !== idx);
+                                            setNoticeData({...noticeData, updates: {...noticeData.updates, items}});
+                                        }} className="w-10 h-10 bg-red-900/10 text-red-500 rounded-xl flex items-center justify-center">✕</button>
                                     </div>
                                 `)}
                             </div>
@@ -347,72 +283,51 @@
                 </div>
             `;
 
-            const SecurityEditor = () => {
-                if (!isSecurityUnlocked) {
-                    return html`
-                        <div className="flex-1 flex flex-col items-center justify-center space-y-8 text-center py-20">
-                            <div className="text-6xl animate-pulse">🔐</div>
-                            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Restricted Security Console</h3>
-                            <form onSubmit=${unlockSecurityTab} className="w-full max-w-xs space-y-4">
-                                <input type="password" autoFocus value=${securityPinInput} onChange=${e => setSecurityPinInput(e.target.value)} className="w-full bg-black/60 border border-slate-800 p-5 rounded-3xl text-center font-mono tracking-widest text-lg outline-none focus:border-orange-500 text-white transition-all" placeholder="MASTER PIN"/>
-                                <button type="submit" className="w-full bg-white text-black font-black py-4 rounded-3xl text-[10px] uppercase shadow-xl">Unlock Console</button>
-                            </form>
-                        </div>
-                    `;
-                }
-                return html`
-                    <div className="space-y-10 animate-slide-up">
-                        <div className="bg-green-600/10 border border-green-500/30 p-6 rounded-[2rem] text-center mb-8">
-                            <h2 className="text-green-400 font-black text-xl tracking-widest uppercase">WELCOME, NEW ADMIN</h2>
-                        </div>
-                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-4">
-                            <h3 className="text-[12px] font-black text-orange-500 uppercase tracking-widest">KEYS MANAGER</h3>
-                            <button onClick=${addNewKey} className="px-5 py-2.5 bg-orange-600 rounded-xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-orange-500 transition-all">+ NEW KEY</button>
-                        </div>
-                        <div className="space-y-8">
-                            ${loginData.keys.map((k, idx) => html`
-                                <div key=${k.id} className="bg-black/30 p-8 rounded-[2.5rem] border border-slate-800 flex flex-col gap-6 relative group">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-600 uppercase mb-3 block tracking-widest">OWNER</label>
-                                            <input value=${k.owner} onChange=${e => updateKeyField(idx, 'owner', e.target.value)} className="w-full bg-[#0d1117] border-b border-slate-800 p-2 text-white font-bold outline-none focus:border-orange-500"/>
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-600 uppercase mb-3 block tracking-widest">KEY CODE</label>
-                                            <input value=${k.key} onChange=${e => updateKeyField(idx, 'key', e.target.value.toUpperCase())} className="w-full bg-[#0d1117] border-b border-slate-800 p-2 text-orange-500 font-mono font-bold outline-none focus:border-orange-500"/>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-600 uppercase mb-3 block tracking-widest">EXPIRY DATE</label>
-                                            <input value=${k.expiry} onChange=${e => updateKeyField(idx, 'expiry', e.target.value)} className="w-full bg-[#0d1117] border border-slate-800 p-3 rounded-xl text-xs text-white outline-none" placeholder="01/03/2026"/>
-                                        </div>
-                                        <div className="bg-black/40 border border-dashed border-slate-800 rounded-2xl p-5 flex flex-col gap-2">
-                                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest">DEVICE LOCK STATUS</label>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">${k.deviceLock ? 'SET' : 'NOT SET (STRICT 1-DEVICE POLICY)'}</span>
-                                                <button onClick=${() => updateKeyField(idx, 'deviceLock', !k.deviceLock)} className="text-[8px] font-black text-blue-500 underline">RESET</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between border-t border-slate-800 pt-6">
-                                        <button onClick=${() => updateKeyField(idx, 'isActive', !k.isActive)} className=${`px-10 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${k.isActive ? 'bg-green-600/10 border border-green-500 text-green-400' : 'bg-slate-800 border border-slate-700 text-slate-500'}`}>
-                                            ${k.isActive ? 'ACTIVE' : 'INACTIVE'}
-                                        </button>
-                                        <button onClick=${() => removeKey(idx)} className="text-red-500 hover:scale-125 transition-all text-xl">✕</button>
+            const SecurityView = () => html`
+                <div className="space-y-10">
+                    <div className="bg-green-600/10 border border-green-500/30 p-5 rounded-[2rem] text-center mb-8">
+                        <h2 className="text-green-400 font-black text-lg tracking-widest uppercase">Welcome, New Admin</h2>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-xs font-black text-orange-500 uppercase tracking-widest">Keys Manager</h3>
+                        <button onClick=${() => setLoginData({keys: [{id: Date.now(), owner: 'New Admin', key: 'RR-'+Math.random().toString(36).substring(2,6).toUpperCase(), expiry: '01/01/2026', isActive: true, deviceLock: false}, ...loginData.keys]})} className="bg-orange-600 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all">+ New Key</button>
+                    </div>
+                    <div className="space-y-6">
+                        ${loginData.keys.length === 0 && html`<div className="py-20 text-center opacity-20 uppercase font-black text-xs tracking-widest">No keys found. Sync to load.</div>`}
+                        ${loginData.keys.map((k, idx) => html`
+                            <div key=${k.id} className="bg-black/30 p-8 rounded-[2.5rem] border border-slate-800 flex flex-col gap-6 relative group">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div><span className="label-text">Owner</span><input value=${k.owner} onChange=${e => { const up = [...loginData.keys]; up[idx].owner = e.target.value; setLoginData({keys: up}); }} className="w-full font-bold"/></div>
+                                    <div><span className="label-text">Key Code</span><input value=${k.key} onChange=${e => { const up = [...loginData.keys]; up[idx].key = e.target.value.toUpperCase(); setLoginData({keys: up}); }} className="w-full text-orange-500 font-mono font-bold"/></div>
+                                </div>
+                                <div>
+                                    <span className="label-text">Expiry Date</span>
+                                    <div className="relative">
+                                        <select value=${k.expiry} onChange=${e => { const up = [...loginData.keys]; up[idx].expiry = e.target.value; setLoginData({keys: up}); }} className="w-full appearance-none">
+                                            <option value="01/03/2026">01/03/2026</option>
+                                            <option value="01/01/2025">01/01/2025</option>
+                                            <option value="01/01/2030">01/01/2030</option>
+                                        </select>
                                     </div>
                                 </div>
-                            `)}
-                        </div>
+                                <div className="bg-black/40 border border-dashed border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
+                                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Device Lock: ${k.deviceLock ? 'SET' : 'NOT SET (STRICT 1-DEVICE POLICY)'}</span>
+                                </div>
+                                <div className="flex items-center justify-between border-t border-slate-800 pt-6">
+                                    <button onClick=${() => { const up = [...loginData.keys]; up[idx].isActive = !up[idx].isActive; setLoginData({keys: up}); }} className=${`px-8 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${k.isActive ? 'bg-green-600/10 border border-green-500 text-green-500' : 'bg-slate-800 border border-slate-700 text-slate-500'}`}>${k.isActive ? 'Active' : 'Disabled'}</button>
+                                    <button onClick=${() => setLoginData({keys: loginData.keys.filter((_, i) => i !== idx)})} className="text-red-500 hover:scale-125 transition-all text-xl">✕</button>
+                                </div>
+                            </div>
+                        `)}
                     </div>
-                `;
-            };
+                </div>
+            `;
 
             return html`
                 <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-6">
-                    ${status && html`<div className="sync-toast">${status.message}</div>`}
+                    ${status && html`<div className="sync-toast">${status}</div>`}
                     
-                    <header className="flex flex-col xl:flex-row justify-between items-center gap-6 bg-[#161b22] p-5 rounded-[2.5rem] border border-slate-800 shadow-2xl relative">
+                    <header className="flex flex-col xl:flex-row justify-between items-center gap-6 bg-[#161b22] p-5 rounded-[2.5rem] border border-slate-800 shadow-2xl">
                         <div className="flex items-center gap-4">
                             <div className="bg-gradient-to-br from-orange-500 to-amber-600 w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl shadow-orange-900/40">RR</div>
                             <div>
@@ -420,134 +335,85 @@
                                 <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Management Suite v2.2</p>
                             </div>
                         </div>
-
-                        <div className="bg-black/40 p-1 rounded-2xl flex flex-wrap justify-center items-center gap-1 border border-slate-800/50">
+                        <div className="bg-black/40 p-1 rounded-2xl flex items-center gap-1 border border-slate-800/50">
                             ${['notice', 'popup', 'events', 'security'].map(tab => html`
                                 <button key=${tab} onClick=${() => { setActiveTab(tab); if(tab !== 'security') setIsSecurityUnlocked(false); }} className=${`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
                                     ${tab === 'notice' ? 'Notices' : tab === 'popup' ? 'Popup' : tab === 'events' ? 'Events' : '🔒 Security'}
                                 </button>
                             `)}
                         </div>
-
-                        <div className="flex flex-col items-center xl:items-end gap-2">
-                            <div className="flex gap-2">
-                                <button onClick=${() => setShowSettings(!showSettings)} className=${`px-5 py-3 rounded-2xl text-xs font-black transition-all ${showSettings ? 'bg-white text-black' : 'bg-slate-800 border border-slate-700 text-slate-300'}`}>
-                                    ${showSettings ? '✕ Close' : '⚙️ Config'}
-                                </button>
-                                <button onClick=${() => handleSync()} disabled=${loading} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-xs font-black text-white shadow-lg flex items-center gap-2">
-                                    ${loading ? html`<div className="loader"></div>` : html`🔄 Sync Live`}
-                                </button>
-                            </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick=${() => setShowSettings(!showSettings)} className=${`px-5 py-2.5 rounded-2xl text-xs font-black transition-all ${showSettings ? 'bg-white text-black' : 'bg-slate-800 border border-slate-700 text-slate-300'}`}>⚙️ Config</button>
+                            <button onClick=${() => handleSync()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-2xl text-xs font-black text-white shadow-lg flex items-center gap-2">
+                                ${loading ? html`<div className="loader"></div>` : html`🔄 Sync Live`}
+                            </button>
                         </div>
                     </header>
 
-                    ${showSettings && html`
-                        <section className="glass-panel p-8 rounded-[2.5rem] animate-slide-up space-y-8 border-orange-500/30">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div><label className="text-[10px] font-black text-slate-500 uppercase mb-2 block">Access Token</label><input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-2xl focus:border-orange-500 outline-none text-sm font-mono"/></div>
-                                <div><label className="text-[10px] font-black text-slate-500 uppercase mb-2 block">Repo Owner</label><input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-2xl focus:border-orange-500 outline-none text-sm"/></div>
-                                <div><label className="text-[10px] font-black text-slate-500 uppercase mb-2 block">Repo Name</label><input value=${config.repo} onChange=${e => setConfig({...config, repo: e.target.value})} className="w-full bg-black border border-slate-800 p-4 rounded-2xl focus:border-orange-500 outline-none text-sm"/></div>
-                            </div>
-                            <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest text-center">Config Changes Persist Locally</p>
-                        </section>
-                    `}
-
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
                         <main className="lg:col-span-8 space-y-8 animate-slide-up">
-                            <section className="glass-panel p-8 md:p-10 rounded-[3rem] shadow-2xl min-h-[600px] flex flex-col relative">
+                            <section className="glass-panel p-8 md:p-10 rounded-[3rem] shadow-2xl min-h-[500px] flex flex-col relative">
                                 <div className="flex justify-between items-center border-b border-slate-800 pb-8 mb-8">
-                                    <h2 className="text-3xl font-black text-white uppercase tracking-tighter">${activeTab.toUpperCase()} BOARD</h2>
-                                    ${activeTab !== 'security' && html`
-                                        <button onClick=${() => {
-                                            if(activeTab === 'notice') setNoticeData(p => ({...p, show: !p.show}));
-                                            else if(activeTab === 'popup') setAnnouncementData(p => ({...p, show: !p.show}));
-                                            else if(activeTab === 'events') setEventsData(p => ({...p, show: !p.show}));
-                                        }} className=${`px-5 py-2.5 rounded-full text-[10px] font-black border-2 transition-all ${((activeTab === 'notice' ? noticeData.show : activeTab === 'popup' ? announcementData.show : eventsData.show)) ? 'bg-green-600/10 border-green-500 text-green-400' : 'bg-slate-800/40 border-slate-700 text-slate-500'}`}>
-                                            ● PUBLIC STATUS
-                                        </button>
-                                    `}
+                                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Editor Session: ${activeTab.toUpperCase()} BOARD</h2>
+                                    ${activeTab !== 'security' && html`<button className="px-5 py-2 rounded-full text-[10px] font-black bg-green-600/10 border-2 border-green-500 text-green-400">● PUBLIC STATUS</button>`}
                                 </div>
 
-                                <div className="space-y-8 flex-1">
-                                    ${activeTab === 'security' && html`<${SecurityEditor} />`}
-                                    ${activeTab === 'notice' && html`<${NoticeEditor} />`}
-                                    ${activeTab === 'popup' && html`
-                                        <div className="space-y-10 animate-slide-up flex-1">
-                                            <div><label className="text-[11px] font-black text-slate-500 uppercase block mb-3 pl-1">Popup Headline</label><input value=${announcementData.title} onChange=${e => setAnnouncementData(p => ({...p, title: e.target.value}))} className="w-full bg-[#0d1117] border border-slate-800 p-6 rounded-[2rem] text-xl font-bold text-white outline-none focus:border-orange-500 transition-all" placeholder="Enter Headline..."/></div>
-                                            <div><label className="text-[11px] font-black text-slate-500 uppercase block mb-3 pl-1">Popup Message Body</label><textarea rows="12" value=${announcementData.message} onChange=${e => setAnnouncementData(p => ({...p, message: e.target.value}))} className="w-full bg-[#0d1117] border border-slate-800 p-6 rounded-[2rem] text-sm text-slate-300 outline-none focus:border-orange-500 resize-none leading-relaxed transition-all" placeholder="Enter Full Message..."/></div>
+                                ${showSettings ? html`
+                                    <div className="space-y-10 py-10 animate-slide-up">
+                                        <div className="flex justify-center gap-4 mb-10">
+                                            <button onClick=${() => setShowSettings(false)} className="px-8 py-3 bg-white text-black rounded-[2rem] font-black text-xs uppercase">✕ Close</button>
+                                            <button onClick=${() => handleSync()} className="px-8 py-3 bg-blue-600 text-white rounded-[2rem] font-black text-xs uppercase">🔄 Sync Live</button>
                                         </div>
-                                    `}
-                                    ${activeTab === 'events' && html`
-                                        <div className="space-y-10 animate-slide-up flex-1">
-                                            <button onClick=${() => setEventsData(p => ({...p, events: [{title: 'New Event', content: ['Detail Point'], theme: {gradient: ["#ff9800", "#ff5722"], glow: "rgba(255,152,0,0.5)"}}, ...p.events]}))} className="w-full py-5 border-2 border-dashed border-slate-800 rounded-[2rem] text-slate-600 hover:text-orange-500 transition-all font-black uppercase text-[11px] tracking-widest">+ Add Event Card</button>
-                                            <div className="space-y-10">
-                                                ${eventsData.events.map((ev, i) => html`
-                                                    <div key=${i} className="bg-black/30 p-8 rounded-[3rem] border border-slate-800 relative group">
-                                                        <button onClick=${() => {
-                                                            const remaining = eventsData.events.filter((_, idx) => idx !== i);
-                                                            setEventsData(p => ({ ...p, events: remaining }));
-                                                        }} className="absolute top-6 right-6 text-red-500/50 hover:text-red-500 transition-all p-2">✕</button>
-                                                        <div className="space-y-6">
-                                                            <div><label className="text-[10px] font-black text-slate-600 uppercase mb-3 block tracking-widest">Headline</label><input value=${ev.title} onChange=${e => {
-                                                                const up = [...eventsData.events];
-                                                                up[i].title = e.target.value;
-                                                                setEventsData(p => ({ ...p, events: up }));
-                                                            }} className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-2xl text-lg font-black text-white outline-none focus:border-orange-500"/></div>
-                                                            <div><label className="text-[10px] font-black text-slate-600 uppercase mb-3 block tracking-widest">Details (1 per line)</label><textarea value=${ev.content.join('\n')} onChange=${e => {
-                                                                const up = [...eventsData.events];
-                                                                up[i].content = e.target.value.split('\n');
-                                                                setEventsData(p => ({ ...p, events: up }));
-                                                            }} rows="4" className="w-full bg-[#0d1117] border border-slate-800 p-4 rounded-2xl text-xs text-slate-400 outline-none focus:border-orange-500 resize-none"/></div>
-                                                        </div>
-                                                    </div>
-                                                `)}
+                                        <div className="space-y-8">
+                                            <div><span className="label-text">Access Token</span><input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full !p-5 !font-mono" placeholder="GitHub PAT..."/></div>
+                                            <div><span className="label-text">Repo Owner</span><input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full !p-5" placeholder="PawanxumanG"/></div>
+                                            <div><span className="label-text">Repo Name</span><input value=${config.repo} onChange=${e => setConfig({...config, repo: e.target.value})} className="w-full !p-5" placeholder="rr-college"/></div>
+                                        </div>
+                                    </div>
+                                ` : html`
+                                    <div className="flex-1">
+                                        ${activeTab === 'notice' ? html`<${NoticeView} />` : 
+                                          activeTab === 'security' ? html`<${SecurityView} />` : 
+                                          activeTab === 'popup' ? html`
+                                            <div className="space-y-6">
+                                                <div><span className="label-text">Popup Headline</span><input value=${announcementData.title} onChange=${e => setAnnouncementData({...announcementData, title: e.target.value})} className="w-full text-xl font-bold"/></div>
+                                                <div><span className="label-text">Popup Body</span><textarea rows="8" value=${announcementData.message} onChange=${e => setAnnouncementData({...announcementData, message: e.target.value})} className="w-full resize-none"/></div>
                                             </div>
-                                        </div>
-                                    `}
-                                </div>
-
-                                <button onClick=${handlePublish} disabled=${loading || !shas[activeTab]} className="w-full mt-10 py-8 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black text-2xl rounded-[2.5rem] shadow-2xl uppercase tracking-[0.2em] transition-all disabled:opacity-30">
-                                    ${loading ? html`<div className="loader mx-auto"></div>` : html`🚀 APPLY LIVE CHANGES`}
-                                </button>
+                                          ` : html`
+                                            <div className="text-center py-20 opacity-20 uppercase font-black tracking-widest">Module under development.</div>
+                                          `}
+                                    </div>
+                                    <button onClick=${handlePublish} disabled=${loading || !shas[activeTab]} className="w-full mt-10 py-8 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black text-xl rounded-[2.5rem] shadow-2xl transition-all disabled:opacity-30">🚀 APPLY LIVE CHANGES</button>
+                                `}
                             </section>
                         </main>
 
                         <aside className="lg:col-span-4 space-y-8 animate-slide-up">
                             <section className="glass-panel p-8 rounded-[3rem] sticky top-8 flex flex-col h-[calc(100vh-10rem)] overflow-hidden">
-                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-10 flex items-center gap-3"><span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span> Dynamic Preview</h3>
-                                <div className="flex-1 bg-[#080a0e] rounded-[2.5rem] p-6 overflow-y-auto custom-scrollbar shadow-inner flex flex-col items-center justify-center space-y-8">
-                                    ${activeTab === 'notice' && html`
-                                        <div className="w-full bg-[#161a22] p-8 rounded-[2.5rem] border border-slate-800 relative overflow-hidden animate-slide-up shadow-2xl">
+                                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-10 flex items-center gap-3"><span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span> Dynamic Preview</h3>
+                                <div className="flex-1 bg-[#050505] rounded-[2.5rem] p-6 overflow-y-auto custom-scrollbar flex flex-col items-center justify-center">
+                                    ${activeTab === 'notice' ? html`
+                                        <div className="w-full bg-[#161a22] p-8 rounded-[2rem] border border-slate-800 relative overflow-hidden shadow-2xl">
                                             <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
-                                            <h4 className="text-orange-500 font-black text-xl uppercase mb-5">${noticeData.title || 'NOTICE TITLE'}</h4>
-                                            <div className="space-y-4">${noticeData.message.map((l, i) => html`<p key=${i} className="text-slate-400 text-xs font-medium leading-relaxed">${l}</p>`)}</div>
+                                            <h4 className="text-orange-500 font-black text-lg uppercase mb-4">${noticeData.title || 'NOTICE TITLE'}</h4>
+                                            <div className="space-y-3">${noticeData.message.map((l, i) => html`<p key=${i} className="text-slate-400 text-[11px] font-medium leading-relaxed">${l}</p>`)}</div>
                                             ${noticeData.updates?.version && html`
-                                                <div className="mt-10 pt-6 border-t border-slate-800/80 flex flex-col gap-3">
-                                                    <span className="text-orange-500 text-[10px] font-black uppercase tracking-widest">${noticeData.updates.version}</span>
-                                                    <div className="flex flex-col gap-2">${(noticeData.updates.items || []).map((it, ii) => html`<span key=${ii} className="text-slate-500 text-[9px] font-bold uppercase tracking-wide">• ${it}</span>`)}</div>
+                                                <div className="mt-8 pt-4 border-t border-slate-800 flex flex-col gap-2">
+                                                    <span className="text-orange-500 text-[9px] font-black uppercase">${noticeData.updates.version}</span>
+                                                    ${(noticeData.updates.items || []).map((it, ii) => html`<span key=${ii} className="text-slate-500 text-[8px] font-bold uppercase">• ${it}</span>`)}
                                                 </div>
                                             `}
                                         </div>
-                                    `}
-                                    ${activeTab === 'popup' && html`
-                                        <div className="w-full max-w-[280px] bg-gradient-to-br from-orange-500 to-amber-600 p-8 rounded-[3rem] text-center shadow-[0_0_50px_rgba(249,115,22,0.4)] animate-slide-up relative">
-                                            <h4 className="text-white font-black text-3xl uppercase mb-6 tracking-tighter">${announcementData.title || 'UPDATE'}</h4>
-                                            <p className="text-white text-sm font-bold leading-relaxed mb-8">📍 ${announcementData.message || 'Announcement content here'}</p>
-                                            <button className="w-full py-5 bg-black text-white font-black rounded-[2rem] text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all">
-                                                OK, GOT IT 👍
-                                            </button>
+                                    ` : activeTab === 'popup' ? html`
+                                        <div className="w-full max-w-[280px] bg-gradient-to-br from-orange-500 to-amber-600 p-8 rounded-[3rem] text-center shadow-2xl">
+                                            <h4 className="text-white font-black text-2xl uppercase mb-4">${announcementData.title || 'UPDATE'}</h4>
+                                            <p className="text-white text-[11px] font-medium mb-8 leading-relaxed">📍 ${announcementData.message || 'Details will appear here.'}</p>
+                                            <button className="w-full py-4 bg-black text-white font-black rounded-2xl text-[10px] uppercase tracking-widest">OK, GOT IT 👍</button>
                                         </div>
-                                    `}
-                                    ${activeTab === 'events' && (eventsData.events.length > 0 ? eventsData.events.map((ev, i) => html`
-                                        <div key=${i} className="w-full p-8 rounded-[2.5rem] text-white shadow-2xl animate-slide-up" style=${{ background: `linear-gradient(135deg, ${ev.theme?.gradient?.join(', ') || '#ff9800, #ff5722'})`, boxShadow: `0 15px 40px ${ev.theme?.glow || 'transparent'}` }}>
-                                            <h4 className="text-xl font-black uppercase mb-4 leading-tight">${ev.title || 'EVENT'}</h4>
-                                            <div className="space-y-2">${ev.content.map((l, ii) => html`<p key=${ii} className="text-[10px] font-medium opacity-90 tracking-tight">• ${l}</p>`)}</div>
-                                        </div>
-                                    `) : html`<div className="opacity-20 text-[9px] font-black uppercase tracking-widest">No Events Found</div>`)}
-                                    ${activeTab === 'security' && html`
-                                        <div className="text-center space-y-6">
-                                            <div className="text-4xl">🔐</div>
-                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">Secure Tab Preview Disabled</p>
+                                    ` : html`
+                                        <div className="text-center opacity-20">
+                                            <div className="text-4xl mb-4">🔐</div>
+                                            <p className="text-[9px] font-black uppercase tracking-[0.2em]">Preview Restricted</p>
                                         </div>
                                     `}
                                 </div>
@@ -555,19 +421,14 @@
                         </aside>
                     </div>
 
-                    <footer className="text-center pt-20 pb-12 flex flex-col items-center gap-10">
+                    <footer className="text-center pt-20 pb-12 flex flex-col items-center gap-6">
                         <div className="flex items-center gap-8">
                             <div className="h-px w-16 bg-slate-800"></div>
-                            <span className="text-[8px] font-black uppercase tracking-[1em] text-slate-600">OFFICIAL SYSTEM</span>
+                            <span className="text-[8px] font-black uppercase tracking-[0.5em] text-slate-700">Official System</span>
                             <div className="h-px w-16 bg-slate-800"></div>
                         </div>
-                        
-                        <div className="flex flex-col items-center gap-1">
-                            <p className="text-slate-700 text-[11px] font-black uppercase tracking-[0.6em] mb-4">RR International College</p>
-                            <${Attribution} />
-                        </div>
-                        
-                        <p className="text-[9px] font-bold text-slate-800 uppercase tracking-[0.4em] opacity-40">ENCRYPTED MANAGEMENT ENVIRONMENT V4.2</p>
+                        <${Attribution} />
+                        <p className="text-[9px] font-bold text-slate-800 uppercase tracking-[0.4em] opacity-40">RR College Management Environment V2.2</p>
                     </footer>
                 </div>
             `;
