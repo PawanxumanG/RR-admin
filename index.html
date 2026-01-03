@@ -59,11 +59,12 @@
         input, textarea, select {
             background-color: #050505 !important;
             border: 1px solid #1f2937 !important;
-            border-radius: 1.5rem !important;
-            padding: 1.25rem 1.5rem !important;
+            border-radius: 1.25rem !important;
+            padding: 1rem 1.25rem !important;
             color: white !important;
             outline: none !important;
             transition: border-color 0.2s;
+            font-size: 14px;
         }
         input:focus, textarea:focus { border-color: #f97316 !important; }
         
@@ -73,7 +74,7 @@
             color: #4b5563;
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
             display: block;
         }
 
@@ -86,6 +87,17 @@
             animation: spin 0.8s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .btn-primary {
+            background: linear-gradient(to right, #ea580c, #f59e0b);
+            color: white;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            transition: all 0.3s;
+        }
+        .btn-primary:hover { opacity: 0.9; transform: scale(1.01); }
+        .btn-primary:active { transform: scale(0.98); }
     </style>
     <script type="importmap">
     {
@@ -118,7 +130,7 @@
             const [isUnlocked, setIsUnlocked] = useState(false);
             const [passwordInput, setPasswordInput] = useState('');
             const [config, setConfig] = useState(() => {
-                const saved = localStorage.getItem('rr_admin_config_v7');
+                const saved = localStorage.getItem('rr_admin_config_v8');
                 return saved ? JSON.parse(saved) : { token: '', owner: 'PawanxumanG', repo: 'rr-college' };
             });
 
@@ -135,7 +147,7 @@
             const [securityPinInput, setSecurityPinInput] = useState('');
 
             useEffect(() => {
-                localStorage.setItem('rr_admin_config_v7', JSON.stringify(config));
+                localStorage.setItem('rr_admin_config_v8', JSON.stringify(config));
             }, [config]);
 
             const notify = (message) => {
@@ -244,7 +256,7 @@
             }
 
             const NoticeView = () => html`
-                <div className="space-y-8">
+                <div className="space-y-10">
                     <div>
                         <span className="label-text">Primary Headline</span>
                         <input value=${noticeData.title} onChange=${e => setNoticeData({...noticeData, title: e.target.value})} className="w-full" placeholder="Headline..."/>
@@ -253,31 +265,29 @@
                         <span className="label-text">Body Content (Full Text)</span>
                         <textarea rows="6" value=${noticeData.message.join('\n')} onChange=${e => setNoticeData({...noticeData, message: e.target.value.split('\n')})} className="w-full resize-none" placeholder="Body text..."/>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-slate-800">
-                        <div>
-                            <span className="label-text">Version Tag</span>
-                            <input value=${noticeData.updates?.version || ''} onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, version: e.target.value}})} className="w-full text-orange-500 font-bold" placeholder="e.g. App Update v2.1"/>
+                    <div>
+                        <span className="label-text">Version Tag</span>
+                        <input value=${noticeData.updates?.version || ''} onChange=${e => setNoticeData({...noticeData, updates: {...noticeData.updates, version: e.target.value}})} className="w-full text-orange-500 font-bold" placeholder="e.g. App Update v2.1"/>
+                    </div>
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="label-text !mb-0">Changelog Items</span>
+                            <button onClick=${() => setNoticeData({...noticeData, updates: {...noticeData.updates, items: [...(noticeData.updates?.items || []), '']}})} className="text-[9px] font-black text-orange-500 uppercase bg-orange-500/10 px-4 py-2 rounded-xl hover:bg-orange-500/20 transition-all">+ Add New Line</button>
                         </div>
-                        <div>
-                            <div className="flex justify-between items-center mb-3">
-                                <span className="label-text !mb-0">Changelog Items</span>
-                                <button onClick=${() => setNoticeData({...noticeData, updates: {...noticeData.updates, items: [...(noticeData.updates?.items || []), '']}})} className="text-[9px] font-black text-orange-500 uppercase bg-orange-500/10 px-3 py-1.5 rounded-xl hover:bg-orange-500/20">+ Add New Line</button>
-                            </div>
-                            <div className="space-y-3">
-                                ${(noticeData.updates?.items || []).length === 0 ? html`<div className="text-[10px] text-slate-600 font-bold uppercase py-10 text-center border border-dashed border-slate-800 rounded-2xl">No Changelog Items Added</div>` : (noticeData.updates.items).map((item, idx) => html`
-                                    <div key=${idx} className="flex gap-3">
-                                        <input value=${item} onChange=${e => {
-                                            const items = [...noticeData.updates.items];
-                                            items[idx] = e.target.value;
-                                            setNoticeData({...noticeData, updates: {...noticeData.updates, items}});
-                                        }} className="flex-1 !p-3 !text-xs !rounded-xl" />
-                                        <button onClick=${() => {
-                                            const items = noticeData.updates.items.filter((_, i) => i !== idx);
-                                            setNoticeData({...noticeData, updates: {...noticeData.updates, items}});
-                                        }} className="w-10 h-10 bg-red-900/10 text-red-500 rounded-xl flex items-center justify-center">✕</button>
-                                    </div>
-                                `)}
-                            </div>
+                        <div className="space-y-3">
+                            ${(noticeData.updates?.items || []).length === 0 ? html`<div className="text-[10px] text-slate-600 font-bold uppercase py-10 text-center border border-dashed border-slate-800 rounded-2xl">No Changelog Items Added</div>` : (noticeData.updates.items).map((item, idx) => html`
+                                <div key=${idx} className="flex gap-3 animate-slide-up">
+                                    <input value=${item} onChange=${e => {
+                                        const items = [...noticeData.updates.items];
+                                        items[idx] = e.target.value;
+                                        setNoticeData({...noticeData, updates: {...noticeData.updates, items}});
+                                    }} className="flex-1 !p-3 !text-xs !rounded-xl" />
+                                    <button onClick=${() => {
+                                        const items = noticeData.updates.items.filter((_, i) => i !== idx);
+                                        setNoticeData({...noticeData, updates: {...noticeData.updates, items}});
+                                    }} className="w-10 h-10 bg-red-900/10 text-red-500 rounded-xl flex items-center justify-center">✕</button>
+                                </div>
+                            `)}
                         </div>
                     </div>
                 </div>
@@ -285,36 +295,40 @@
 
             const SecurityView = () => html`
                 <div className="space-y-10">
-                    <div className="bg-green-600/10 border border-green-500/30 p-5 rounded-[2rem] text-center mb-8">
-                        <h2 className="text-green-400 font-black text-lg tracking-widest uppercase">Welcome, New Admin</h2>
+                    <div className="bg-green-900/10 border border-green-500/30 p-6 rounded-[2.5rem] text-center mb-8">
+                        <h2 className="text-green-500 font-black text-xl tracking-widest uppercase">Welcome, New Admin</h2>
                     </div>
                     <div className="flex justify-between items-center">
                         <h3 className="text-xs font-black text-orange-500 uppercase tracking-widest">Keys Manager</h3>
-                        <button onClick=${() => setLoginData({keys: [{id: Date.now(), owner: 'New Admin', key: 'RR-'+Math.random().toString(36).substring(2,6).toUpperCase(), expiry: '01/01/2026', isActive: true, deviceLock: false}, ...loginData.keys]})} className="bg-orange-600 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all">+ New Key</button>
+                        <button onClick=${() => setLoginData({keys: [{id: Date.now(), owner: 'New Admin', key: 'RR-'+Math.random().toString(36).substring(2,6).toUpperCase(), expiry: '01/03/2026', isActive: true, deviceLock: false}, ...loginData.keys]})} className="bg-orange-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all">+ New Key</button>
                     </div>
-                    <div className="space-y-6">
+                    <div className="space-y-8">
                         ${loginData.keys.length === 0 && html`<div className="py-20 text-center opacity-20 uppercase font-black text-xs tracking-widest">No keys found. Sync to load.</div>`}
                         ${loginData.keys.map((k, idx) => html`
-                            <div key=${k.id} className="bg-black/30 p-8 rounded-[2.5rem] border border-slate-800 flex flex-col gap-6 relative group">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div><span className="label-text">Owner</span><input value=${k.owner} onChange=${e => { const up = [...loginData.keys]; up[idx].owner = e.target.value; setLoginData({keys: up}); }} className="w-full font-bold"/></div>
-                                    <div><span className="label-text">Key Code</span><input value=${k.key} onChange=${e => { const up = [...loginData.keys]; up[idx].key = e.target.value.toUpperCase(); setLoginData({keys: up}); }} className="w-full text-orange-500 font-mono font-bold"/></div>
-                                </div>
-                                <div>
-                                    <span className="label-text">Expiry Date</span>
-                                    <div className="relative">
-                                        <select value=${k.expiry} onChange=${e => { const up = [...loginData.keys]; up[idx].expiry = e.target.value; setLoginData({keys: up}); }} className="w-full appearance-none">
+                            <div key=${k.id} className="bg-[#111827]/40 p-8 rounded-[3rem] border border-slate-800 flex flex-col gap-6 relative group animate-slide-up">
+                                <div className="space-y-6">
+                                    <div>
+                                        <span className="label-text">Owner</span>
+                                        <input value=${k.owner} onChange=${e => { const up = [...loginData.keys]; up[idx].owner = e.target.value; setLoginData({keys: up}); }} className="w-full font-bold !bg-transparent border-none border-b !rounded-none !p-2 focus:border-orange-500"/>
+                                    </div>
+                                    <div>
+                                        <span className="label-text">Key Code</span>
+                                        <input value=${k.key} onChange=${e => { const up = [...loginData.keys]; up[idx].key = e.target.value.toUpperCase(); setLoginData({keys: up}); }} className="w-full text-orange-500 font-mono font-bold !bg-transparent border-none border-b !rounded-none !p-2 focus:border-orange-500"/>
+                                    </div>
+                                    <div>
+                                        <span className="label-text">Expiry Date</span>
+                                        <select value=${k.expiry} onChange=${e => { const up = [...loginData.keys]; up[idx].expiry = e.target.value; setLoginData({keys: up}); }} className="w-full cursor-pointer">
                                             <option value="01/03/2026">01/03/2026</option>
-                                            <option value="01/01/2025">01/01/2025</option>
+                                            <option value="01/01/2027">01/01/2027</option>
                                             <option value="01/01/2030">01/01/2030</option>
                                         </select>
                                     </div>
-                                </div>
-                                <div className="bg-black/40 border border-dashed border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
-                                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Device Lock: ${k.deviceLock ? 'SET' : 'NOT SET (STRICT 1-DEVICE POLICY)'}</span>
+                                    <div className="bg-black/40 border border-dashed border-slate-800 rounded-2xl p-6 flex flex-col gap-2">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Device Lock: ${k.deviceLock ? 'Set' : 'Not Set (Strict 1-Device Policy)'}</span>
+                                    </div>
                                 </div>
                                 <div className="flex items-center justify-between border-t border-slate-800 pt-6">
-                                    <button onClick=${() => { const up = [...loginData.keys]; up[idx].isActive = !up[idx].isActive; setLoginData({keys: up}); }} className=${`px-8 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${k.isActive ? 'bg-green-600/10 border border-green-500 text-green-500' : 'bg-slate-800 border border-slate-700 text-slate-500'}`}>${k.isActive ? 'Active' : 'Disabled'}</button>
+                                    <button onClick=${() => { const up = [...loginData.keys]; up[idx].isActive = !up[idx].isActive; setLoginData({keys: up}); }} className=${`px-10 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${k.isActive ? 'bg-green-600/10 border border-green-500 text-green-500' : 'bg-slate-800 border border-slate-700 text-slate-500'}`}>${k.isActive ? 'Active' : 'Disabled'}</button>
                                     <button onClick=${() => setLoginData({keys: loginData.keys.filter((_, i) => i !== idx)})} className="text-red-500 hover:scale-125 transition-all text-xl">✕</button>
                                 </div>
                             </div>
@@ -335,16 +349,16 @@
                                 <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Management Suite v2.2</p>
                             </div>
                         </div>
-                        <div className="bg-black/40 p-1 rounded-2xl flex items-center gap-1 border border-slate-800/50">
+                        <div className="bg-black/40 p-1.5 rounded-2xl flex items-center gap-1 border border-slate-800/50">
                             ${['notice', 'popup', 'events', 'security'].map(tab => html`
-                                <button key=${tab} onClick=${() => { setActiveTab(tab); if(tab !== 'security') setIsSecurityUnlocked(false); }} className=${`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
-                                    ${tab === 'notice' ? 'Notices' : tab === 'popup' ? 'Popup' : tab === 'events' ? 'Events' : '🔒 Security'}
+                                <button key=${tab} onClick=${() => { setActiveTab(tab); if(tab !== 'security') setIsSecurityUnlocked(false); }} className=${`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+                                    ${tab === 'security' ? '🔒 Security' : tab}
                                 </button>
                             `)}
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick=${() => setShowSettings(!showSettings)} className=${`px-5 py-2.5 rounded-2xl text-xs font-black transition-all ${showSettings ? 'bg-white text-black' : 'bg-slate-800 border border-slate-700 text-slate-300'}`}>⚙️ Config</button>
-                            <button onClick=${() => handleSync()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-2xl text-xs font-black text-white shadow-lg flex items-center gap-2">
+                        <div className="flex items-center gap-3">
+                            <button onClick=${() => setShowSettings(!showSettings)} className=${`px-5 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${showSettings ? 'bg-white text-black' : 'bg-slate-800 border border-slate-700 text-slate-400'}`}>⚙️ Config</button>
+                            <button onClick=${() => handleSync()} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-[10px] font-black uppercase text-white shadow-lg flex items-center gap-2">
                                 ${loading ? html`<div className="loader"></div>` : html`🔄 Sync Live`}
                             </button>
                         </div>
@@ -352,22 +366,21 @@
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
                         <main className="lg:col-span-8 space-y-8 animate-slide-up">
-                            <section className="glass-panel p-8 md:p-10 rounded-[3rem] shadow-2xl min-h-[500px] flex flex-col relative">
-                                <div className="flex justify-between items-center border-b border-slate-800 pb-8 mb-8">
-                                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Editor Session: ${activeTab.toUpperCase()} BOARD</h2>
-                                    ${activeTab !== 'security' && html`<button className="px-5 py-2 rounded-full text-[10px] font-black bg-green-600/10 border-2 border-green-500 text-green-400">● PUBLIC STATUS</button>`}
+                            <section className="glass-panel p-8 md:p-12 rounded-[3.5rem] shadow-2xl min-h-[600px] flex flex-col relative">
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-8 mb-10">
+                                    <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Editor Session: ${activeTab.toUpperCase()} BOARD</h2>
+                                    ${activeTab !== 'security' && html`<button className="px-5 py-2.5 rounded-full text-[10px] font-black bg-green-600/10 border-2 border-green-500 text-green-400">● PUBLIC STATUS</button>`}
                                 </div>
 
                                 ${showSettings ? html`
-                                    <div className="space-y-10 py-10 animate-slide-up">
+                                    <div className="space-y-12 py-10 animate-slide-up">
                                         <div className="flex justify-center gap-4 mb-10">
-                                            <button onClick=${() => setShowSettings(false)} className="px-8 py-3 bg-white text-black rounded-[2rem] font-black text-xs uppercase">✕ Close</button>
-                                            <button onClick=${() => handleSync()} className="px-8 py-3 bg-blue-600 text-white rounded-[2rem] font-black text-xs uppercase">🔄 Sync Live</button>
+                                            <button onClick=${() => setShowSettings(false)} className="px-10 py-4 bg-white text-black rounded-[2.5rem] font-black text-xs uppercase shadow-xl hover:bg-slate-200 transition-all">✕ Close Settings</button>
                                         </div>
-                                        <div className="space-y-8">
-                                            <div><span className="label-text">Access Token</span><input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full !p-5 !font-mono" placeholder="GitHub PAT..."/></div>
-                                            <div><span className="label-text">Repo Owner</span><input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full !p-5" placeholder="PawanxumanG"/></div>
-                                            <div><span className="label-text">Repo Name</span><input value=${config.repo} onChange=${e => setConfig({...config, repo: e.target.value})} className="w-full !p-5" placeholder="rr-college"/></div>
+                                        <div className="space-y-10 max-w-2xl mx-auto">
+                                            <div><span className="label-text">Access Token</span><input type="password" value=${config.token} onChange=${e => setConfig({...config, token: e.target.value})} className="w-full !p-6 !font-mono text-center" placeholder="GitHub PAT..."/></div>
+                                            <div><span className="label-text">Repo Owner</span><input value=${config.owner} onChange=${e => setConfig({...config, owner: e.target.value})} className="w-full !p-6 text-center" placeholder="PawanxumanG"/></div>
+                                            <div><span className="label-text">Repo Name</span><input value=${config.repo} onChange=${e => setConfig({...config, repo: e.target.value})} className="w-full !p-6 text-center" placeholder="rr-college"/></div>
                                         </div>
                                     </div>
                                 ` : html`
@@ -375,45 +388,45 @@
                                         ${activeTab === 'notice' ? html`<${NoticeView} />` : 
                                           activeTab === 'security' ? html`<${SecurityView} />` : 
                                           activeTab === 'popup' ? html`
-                                            <div className="space-y-6">
+                                            <div className="space-y-8">
                                                 <div><span className="label-text">Popup Headline</span><input value=${announcementData.title} onChange=${e => setAnnouncementData({...announcementData, title: e.target.value})} className="w-full text-xl font-bold"/></div>
-                                                <div><span className="label-text">Popup Body</span><textarea rows="8" value=${announcementData.message} onChange=${e => setAnnouncementData({...announcementData, message: e.target.value})} className="w-full resize-none"/></div>
+                                                <div><span className="label-text">Popup Message Content</span><textarea rows="10" value=${announcementData.message} onChange=${e => setAnnouncementData({...announcementData, message: e.target.value})} className="w-full resize-none" placeholder="Enter full announcement..."/></div>
                                             </div>
                                           ` : html`
-                                            <div className="text-center py-20 opacity-20 uppercase font-black tracking-widest">Module under development.</div>
+                                            <div className="text-center py-20 opacity-20 uppercase font-black tracking-[0.3em]">Module under development.</div>
                                           `}
                                     </div>
-                                    <button onClick=${handlePublish} disabled=${loading || !shas[activeTab]} className="w-full mt-10 py-8 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black text-xl rounded-[2.5rem] shadow-2xl transition-all disabled:opacity-30">🚀 APPLY LIVE CHANGES</button>
+                                    <button onClick=${handlePublish} disabled=${loading || !shas[activeTab]} className="btn-primary w-full mt-12 py-8 rounded-[3rem] text-xl shadow-2xl disabled:opacity-30">🚀 APPLY LIVE CHANGES</button>
                                 `}
                             </section>
                         </main>
 
                         <aside className="lg:col-span-4 space-y-8 animate-slide-up">
-                            <section className="glass-panel p-8 rounded-[3rem] sticky top-8 flex flex-col h-[calc(100vh-10rem)] overflow-hidden">
-                                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-10 flex items-center gap-3"><span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span> Dynamic Preview</h3>
-                                <div className="flex-1 bg-[#050505] rounded-[2.5rem] p-6 overflow-y-auto custom-scrollbar flex flex-col items-center justify-center">
+                            <section className="glass-panel p-8 rounded-[3.5rem] sticky top-8 flex flex-col h-[calc(100vh-10rem)] overflow-hidden">
+                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-10 flex items-center gap-3"><span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span> Dynamic Preview</h3>
+                                <div className="flex-1 bg-[#050505] rounded-[2.5rem] p-8 overflow-y-auto custom-scrollbar flex flex-col items-center justify-center">
                                     ${activeTab === 'notice' ? html`
-                                        <div className="w-full bg-[#161a22] p-8 rounded-[2rem] border border-slate-800 relative overflow-hidden shadow-2xl">
+                                        <div className="w-full bg-[#161a22] p-8 rounded-[2.5rem] border border-slate-800 relative overflow-hidden shadow-2xl animate-slide-up">
                                             <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
-                                            <h4 className="text-orange-500 font-black text-lg uppercase mb-4">${noticeData.title || 'NOTICE TITLE'}</h4>
-                                            <div className="space-y-3">${noticeData.message.map((l, i) => html`<p key=${i} className="text-slate-400 text-[11px] font-medium leading-relaxed">${l}</p>`)}</div>
+                                            <h4 className="text-orange-500 font-black text-xl uppercase mb-6">${noticeData.title || 'NOTICE TITLE'}</h4>
+                                            <div className="space-y-4">${noticeData.message.map((l, i) => html`<p key=${i} className="text-slate-400 text-xs font-medium leading-relaxed">${l}</p>`)}</div>
                                             ${noticeData.updates?.version && html`
-                                                <div className="mt-8 pt-4 border-t border-slate-800 flex flex-col gap-2">
-                                                    <span className="text-orange-500 text-[9px] font-black uppercase">${noticeData.updates.version}</span>
-                                                    ${(noticeData.updates.items || []).map((it, ii) => html`<span key=${ii} className="text-slate-500 text-[8px] font-bold uppercase">• ${it}</span>`)}
+                                                <div className="mt-10 pt-6 border-t border-slate-800 flex flex-col gap-3">
+                                                    <span className="text-orange-500 text-[11px] font-black uppercase tracking-widest">${noticeData.updates.version}</span>
+                                                    <div className="flex flex-col gap-2">${(noticeData.updates.items || []).map((it, ii) => html`<span key=${ii} className="text-slate-500 text-[10px] font-bold uppercase">• ${it}</span>`)}</div>
                                                 </div>
                                             `}
                                         </div>
                                     ` : activeTab === 'popup' ? html`
-                                        <div className="w-full max-w-[280px] bg-gradient-to-br from-orange-500 to-amber-600 p-8 rounded-[3rem] text-center shadow-2xl">
-                                            <h4 className="text-white font-black text-2xl uppercase mb-4">${announcementData.title || 'UPDATE'}</h4>
-                                            <p className="text-white text-[11px] font-medium mb-8 leading-relaxed">📍 ${announcementData.message || 'Details will appear here.'}</p>
-                                            <button className="w-full py-4 bg-black text-white font-black rounded-2xl text-[10px] uppercase tracking-widest">OK, GOT IT 👍</button>
+                                        <div className="w-full max-w-[300px] bg-gradient-to-br from-orange-600 to-amber-600 p-10 rounded-[3.5rem] text-center shadow-2xl animate-slide-up">
+                                            <h4 className="text-white font-black text-3xl uppercase mb-6 tracking-tighter">${announcementData.title || 'UPDATE'}</h4>
+                                            <p className="text-white text-sm font-medium mb-10 leading-relaxed">📍 ${announcementData.message || 'Announcement details here.'}</p>
+                                            <button className="w-full py-5 bg-black text-white font-black rounded-[2rem] text-xs uppercase tracking-widest">OK, GOT IT 👍</button>
                                         </div>
                                     ` : html`
-                                        <div className="text-center opacity-20">
-                                            <div className="text-4xl mb-4">🔐</div>
-                                            <p className="text-[9px] font-black uppercase tracking-[0.2em]">Preview Restricted</p>
+                                        <div className="text-center opacity-20 py-20">
+                                            <div className="text-6xl mb-6">🔐</div>
+                                            <p className="text-[11px] font-black uppercase tracking-[0.4em]">Preview Locked</p>
                                         </div>
                                     `}
                                 </div>
@@ -421,14 +434,14 @@
                         </aside>
                     </div>
 
-                    <footer className="text-center pt-20 pb-12 flex flex-col items-center gap-6">
-                        <div className="flex items-center gap-8">
-                            <div className="h-px w-16 bg-slate-800"></div>
-                            <span className="text-[8px] font-black uppercase tracking-[0.5em] text-slate-700">Official System</span>
-                            <div className="h-px w-16 bg-slate-800"></div>
+                    <footer className="text-center pt-24 pb-12 flex flex-col items-center gap-10">
+                        <div className="flex items-center gap-10">
+                            <div className="h-px w-20 bg-slate-800"></div>
+                            <span className="text-[9px] font-black uppercase tracking-[1em] text-slate-700">Official Secure Environment</span>
+                            <div className="h-px w-20 bg-slate-800"></div>
                         </div>
                         <${Attribution} />
-                        <p className="text-[9px] font-bold text-slate-800 uppercase tracking-[0.4em] opacity-40">RR College Management Environment V2.2</p>
+                        <p className="text-[10px] font-bold text-slate-800 uppercase tracking-[0.5em] opacity-30">RR College Management Dashboard V4.2</p>
                     </footer>
                 </div>
             `;
